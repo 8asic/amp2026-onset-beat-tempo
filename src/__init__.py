@@ -1,0 +1,1 @@
+"""AMP Challenge - Onset, Beat, and Tempo Detection."""
