@@ -1,0 +1,12 @@
+{
+  "experiment_id": "EXP-004",
+  "timestamp": "20260611_204509",
+  "git_commit": "e6f990f",
+  "val_scores": {
+    "onset_f1": 0.7866,
+    "beat_f1": 0.496,
+    "tempo": 0.5844
+  },
+  "notes": "gamma=200, mu=3, threshold=0.011",
+  "n_test_files": 50
+}
