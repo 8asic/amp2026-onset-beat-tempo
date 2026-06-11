@@ -245,4 +245,69 @@ REJECTED. Reverted to EXP-002 state. Will revisit with a corrected winner select
 - Continue with γ/μ sweep (was EXP-003 in backlog, now becomes EXP-004)
 
 ---
+## EXP-004 — γ and μ Sweep on 127 Files
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-004 |
+| **Date** | 2026-06-11 |
+| **Status** | COMPLETED — config updated, submission generated |
+| **Git commit (before)** | 098fc3c |
+| **Git commit (after)** | f60c539 |
+
+### Files Modified
+- `src/config.py` — `superflux_gamma` 100.0→200.0, `threshold` 0.01→0.011
+
+### Sweep Grid
+12 combinations: γ ∈ {50, 100, 200} × μ ∈ {1, 2, 3, 5}, threshold=0.01.
+Then fine threshold sweep at γ=200, μ=3 over {0.010, 0.011, 0.012, 0.013, 0.014, 0.015}.
+
+Key results (onset F1 only — beat/tempo flat):
+
+| γ | μ | Onset F1 |
+|---|---|---------|
+| 50 | 3 | 0.7760 |
+| 100 | 3 | 0.7824 *(was default)* |
+| **200** | **3** | **0.7858** |
+| 200 | 1 | 0.7848 |
+| 200 | 2 | 0.7832 |
+| 200 | 5 | 0.7755 |
+
+Best threshold at γ=200, μ=3: **0.011** (onset=0.7866).
+
+### Validation Results (127 files)
+| Metric | Score | vs EXP-002 |
+|--------|-------|------------|
+| Onset F1 | **0.7866** | **+0.0042** |
+| Beat F1 | 0.4960 | 0 |
+| Tempo p-score | 0.5844 | 0 |
+| **Mean** | **0.6224** | **+0.0014** |
+
+### Leaderboard Results
+| Metric | Score |
+|--------|-------|
+| Onset F1 | *fill in* |
+| Beat F1 | *fill in* |
+| Tempo | *fill in* |
+| Mean | *fill in* |
+
+### Analysis
+Higher γ (stronger log compression) amplifies the contrast between background
+and transients in the mel spectrogram, making the onset peaks more salient.
+μ=3 remains optimal — the frequency-axis max filter window of 3 mel bins
+suppresses vibrato without over-smoothing.
+
+The threshold shift from 0.01→0.011 recovers precision lost due to the sharper
+ODF distribution at γ=200 (more aggressive peak shapes need a slightly
+higher bar to pass the adaptive threshold).
+
+### Decision
+KEEP. Small but clean improvement with no side effects. Update config defaults.
+
+### Next Actions
+- Generate and upload new submission to challenge server
+- Update CLAUDE.md best scores
+- Next: EXP-005 (99th-percentile ODF norm) or EXP-007 (fixed multi-hypothesis)
+
+---
 <!-- Add new entries below this line -->
