@@ -367,4 +367,89 @@ KEEP. Clean +0.020 beat F1 improvement, no regressions.
 - Try pair-based tempo estimator from teammate approach
 
 ---
+## EXP-006 — Log-Mel Spectral Flux Beat Activation
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-006 |
+| **Date** | 2026-06-11 |
+| **Status** | COMPLETED |
+| **Git commit (before)** | 417f6b4 |
+| **Git commit (after)** | 09b1124 |
+
+### Files Modified
+- `src/detectors.py` — `BeatTracker._beat_odf()`: added log-mel spectral flux method; `BeatTracker.track()`: switched from `librosa.onset.onset_strength` to `_beat_odf()`
+
+### Validation Results (127 files, standalone script)
+| Metric | Score | vs EXP-005 |
+|--------|-------|------------|
+| Onset F1 | 0.7243 | 0 |
+| Beat F1 | **0.5359** | **+0.020** |
+| Tempo p-score | 0.5958 | 0 |
+| **Mean** | **0.6187** | **+0.0066** |
+
+**Note:** The 0.7866 onset F1 previously recorded for EXP-004/005 was from notebook runs with a different evaluation path. Standalone 127-file onset F1 was always ~0.72.
+
+### Analysis
+Log-mel spectral flux (+1 positive diffs of log(1+mel)) as beat activation outperforms `librosa.onset.onset_strength` because it responds more cleanly to drum-level transients without being confused by harmonic energy changes. +0.020 beat F1 improvement.
+
+### Decision
+KEEP.
+
+---
+
+## EXP-007 — Better Tempo Estimator (log-mel AC, [60–200] search) + Threshold Sweep
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-007 |
+| **Date** | 2026-06-12 |
+| **Status** | COMPLETED |
+| **Git commit (before)** | 09b1124 |
+| **Git commit (after)** | *fill in* |
+
+### Motivation
+Root-cause analysis showed 39% of training files had wrong tempo (AC predicting ~34 BPM when true tempo is 100–200 BPM). Beat F1 on wrong-tempo files = 0.3783 vs 0.6383 on correct-tempo files. The old TempoEstimator used `librosa.onset.onset_strength` at hop=1024 and searched [30, 200] BPM — this allowed strong measure-level (4-beat) AC peaks (~34 BPM) to dominate. Additionally, threshold=0.011 was too conservative for the onset peak picker.
+
+### Root Cause Analysis
+- Old method: 74/127 files correct tempo (58%)
+- New method: 102/127 files correct tempo (80%)  
+- All 21 false-prediction files predicted < 40 BPM (measure level) when GT was 68–205 BPM
+- Fix: search [60, 200] BPM using log-mel flux ODF → avoids measure-level AC peaks
+
+### Files Modified
+- `src/config.py` — `threshold` 0.011→0.001 (swept, monotone improvement); added `BeatConfig.tempo_search_min=60.0`
+- `src/detectors.py` — `TempoEstimator.estimate()`: replaced `librosa.onset.onset_strength` at hop=1024 with log-mel flux at hop=512, search [60, 200] BPM, stores `_primary`; `Pipeline.process_file()`: pass `_primary` to beat tracker (avoids half-tempo input for high-BPM files)
+
+### Threshold Sweep
+| threshold | onset F1 |
+|-----------|---------|
+| 0.011 | 0.7243 |
+| 0.005 | 0.7501 |
+| 0.001 | **0.7606** |
+| 0.000 | 0.7628 |
+
+Chose 0.001 (marginal vs 0.000, safer on test set).
+
+### Validation Results (127 files)
+| Metric | Score | vs EXP-006 |
+|--------|-------|------------|
+| Onset F1 | **0.7606** | **+0.036** |
+| Beat F1 | **0.6838** | **+0.148** |
+| Tempo p-score | **0.7269** | **+0.131** |
+| **Mean** | **0.7238** | **+0.105** |
+
+### Analysis
+The measure-level AC false peaks (34 BPM) were the single largest source of beat/tempo errors. Restricting tempo search to [60, 200] BPM with a better ODF (log-mel flux at hop=512 vs librosa's onset_strength at hop=1024) fixed 38 files and broke only 10 — net +28 files with correct tempo. Onset threshold lowering recovers false negatives that the adaptive mean peak picker was suppressing unnecessarily.
+
+### Decision
+KEEP. +0.105 mean score improvement — largest single-experiment gain.
+
+### Next Actions
+- Upload submission to challenge server
+- Address the 10 regression files (mostly factor-1.5 or ×3 errors)
+- Investigate further onset improvements
+
+---
+
 <!-- Add new entries below this line -->

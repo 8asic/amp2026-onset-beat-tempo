@@ -24,7 +24,7 @@ class AudioConfig:
 @dataclass
 class OnsetConfig:
     """Onset detection parameters."""
-    threshold: float = 0.011  # tuned for gamma=200, mu=3, hop=256
+    threshold: float = 0.001  # swept on 127 files: lower delta → better F1
     peak_distance: int = 2   # SMALLER = more peaks (was 3)
     smoothing_sigma: float = 1.0
     method: str = "superflux"  # or "flux"
@@ -36,6 +36,7 @@ class BeatConfig:
     """Beat tracking parameters."""
     tempo_min: float = 30.0
     tempo_max: float = 200.0
+    tempo_search_min: float = 60.0    # AC search floor; avoids measure-level false peaks
     dp_alpha: float = 100.0          # Ellis DP tightness (kept for reference)
     dp_transition_width: float = 0.10  # tight window: ±fraction of beat period
     dp_transition_lambda: float = 1.0  # Gaussian penalty strength

@@ -141,49 +141,64 @@ class BeatTracker:
         lags = np.arange(lag_min, lag_max + 1)
         r = np.correlate(onset_env, onset_env, mode='full')
         r = r[N - 1:]
-        r_norm = r[lags] / (N - lags.astype(float) + 1e-10)
+        denom = np.float64(N) - lags.astype(np.float64) + 1e-10
+        r_norm = r[lags] / denom
         best_lag = int(lags[np.argmax(r_norm)])
         return 60.0 * fps / best_lag
 
 
 class TempoEstimator:
     """Estimate tempo from audio."""
-    
+
     def __init__(self, cfg=None):
         self.cfg = cfg or config
-    
+        self._primary: float = 120.0  # last AC primary (for beat tracker)
+
     def estimate(self, y: np.ndarray, sr: int) -> List[float]:
         """
-        Estimate tempo using autocorrelation of onset envelope (L05 slides 23-24).
+        Estimate tempo using log-mel spectral flux autocorrelation.
+
+        Search range [tempo_search_min, tempo_max] avoids strong measure-level
+        AC peaks that cause the old librosa-based estimator to predict ~34 BPM
+        for 100–200 BPM music.  The stored _primary (always in search range) is
+        used by the multi-hypothesis beat tracker.
         """
-        onset_env = librosa.onset.onset_strength(
-            y=y, sr=sr, hop_length=self.cfg.audio.tempo_hop_length
+        hop = self.cfg.audio.beat_hop_length
+        mel = librosa.feature.melspectrogram(
+            y=y, sr=sr, hop_length=hop, n_mels=80,
+            fmin=self.cfg.audio.onset_fmin, fmax=self.cfg.audio.onset_fmax,
         )
-        fps = sr / self.cfg.audio.tempo_hop_length
+        log_mel = np.log1p(mel)
+        diff = np.diff(log_mel, axis=1, prepend=log_mel[:, :1])
+        onset_env = np.sum(np.maximum(diff, 0), axis=0)
+        if onset_env.max() > 0:
+            onset_env /= onset_env.max()
+
+        fps = sr / float(hop)
         N = len(onset_env)
 
-        bpm_min = self.cfg.beat.tempo_min
-        bpm_max = self.cfg.beat.tempo_max
-        lag_min = max(1, int(np.ceil(60.0 / bpm_max * fps)))
-        lag_max = min(int(np.floor(60.0 / bpm_min * fps)), N // 2)
+        bpm_lo = self.cfg.beat.tempo_search_min   # 60.0
+        bpm_hi = self.cfg.beat.tempo_max           # 200.0
+        lag_min = max(1, int(np.ceil(60.0 / bpm_hi * fps)))
+        lag_max = min(int(np.floor(60.0 / bpm_lo * fps)), N // 2)
 
         lags = np.arange(lag_min, lag_max + 1)
+        r = np.correlate(onset_env, onset_env, mode='full')[N - 1:]
+        denom = np.float64(N) - lags.astype(np.float64) + 1e-10
+        r_norm = r[lags] / denom
 
-        r = np.correlate(onset_env, onset_env, mode='full')
-        r = r[N - 1:]
-        r_norm = r[lags] / (N - lags.astype(float) + 1e-10)
+        best_lag = int(lags[int(np.argmax(r_norm))])
+        primary = 60.0 * fps / best_lag
+        self._primary = float(primary)
 
-        best_idx = int(np.argmax(r_norm))
-        best_lag = int(lags[best_idx])
-        primary_bpm = 60.0 * fps / best_lag
-
-        # Return primary tempo + octave alternative
-        if primary_bpm * 2 <= self.cfg.beat.tempo_max:
-            return [float(primary_bpm), float(primary_bpm * 2)]
-        elif primary_bpm / 2 >= self.cfg.beat.tempo_min:
-            return [float(primary_bpm / 2), float(primary_bpm)]
-        
-        return [float(primary_bpm)]
+        # Submission pair: primary + its octave alternative, sorted [lo, hi].
+        bpm_min = self.cfg.beat.tempo_min
+        bpm_max = self.cfg.beat.tempo_max
+        if primary * 2.0 <= bpm_max:
+            return [float(primary), float(primary * 2.0)]
+        elif primary / 2.0 >= bpm_min:
+            return [float(primary / 2.0), float(primary)]
+        return [float(primary)]
 
 
 class Pipeline:
@@ -202,14 +217,16 @@ class Pipeline:
         Returns:
             (onsets, beats, tempos)
         """
-        # Estimate tempo first
+        # Estimate tempo first; _primary is always in [tempo_search_min, tempo_max]
         tempos = self.tempo_estimator.estimate(y, sr)
-        primary_tempo = tempos[0]
-        
+        # Use the raw AC primary for beat tracking — avoids sending half-tempo to the DP
+        # when primary > 100 BPM (tempos[0] would be primary/2 in that case).
+        beat_tempo = self.tempo_estimator._primary
+
         # Detect onsets
         onsets = self.onset_detector.detect(y, sr)
-        
+
         # Track beats using estimated tempo
-        beats, _ = self.beat_tracker.track(y, sr, tempo=primary_tempo)
+        beats, _ = self.beat_tracker.track(y, sr, tempo=beat_tempo)
         
         return onsets, beats, tempos

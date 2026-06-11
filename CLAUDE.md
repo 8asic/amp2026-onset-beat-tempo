@@ -135,15 +135,17 @@ Tempo GT format: `[t_lo, t_hi, w]` where `w` is the annotator weight for
 
 ## Current Best Validated Scores
 
+Scores are from standalone 127-file evaluation scripts (not notebook runs).
+
 | Metric | Validation (127 files) | Leaderboard |
 |--------|----------------------|-------------|
-| Onset F1 | **0.7866** (EXP-004) | *fill in* |
-| Beat F1 | **0.5359** (EXP-006) | *fill in* |
-| Tempo p-score | **0.5958** (EXP-005) | *fill in* |
-| Mean | **0.6394** (EXP-006) | *fill in* |
+| Onset F1 | **0.7606** (EXP-007) | *fill in* |
+| Beat F1 | **0.6838** (EXP-007) | *fill in* |
+| Tempo p-score | **0.7269** (EXP-007) | *fill in* |
+| Mean | **0.7238** (EXP-007) | *fill in* |
 
-Baseline (EXP-000, 20-file split): Onset=0.4318, Beat=0.3855, Tempo=0.3250, Mean=0.3808
-EXP-005 config: threshold=0.011, method=superflux, onset_hop_length=256, superflux_gamma=200, superflux_mu=3, dp_transition_width=0.10, dp_transition_lambda=1.0
+Baseline (EXP-006, 127-file standalone): Onset=0.7243, Beat=0.5359, Tempo=0.5958, Mean=0.6187
+EXP-007 config: threshold=0.001, method=superflux, onset_hop_length=256, superflux_gamma=200, superflux_mu=3, dp_transition_width=0.10, dp_transition_lambda=1.0, tempo_search_min=60.0
 
 ## Experiment Tracking
 
