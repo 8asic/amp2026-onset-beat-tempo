@@ -57,27 +57,61 @@ class BeatTracker:
         self.cfg = cfg or config
     
     def track(self, y: np.ndarray, sr: int, tempo: Optional[float] = None) -> Tuple[np.ndarray, float]:
-        """Beat tracking via dynamic programming trellis (Ellis 2007)."""
+        """Beat tracking: multi-hypothesis DP (Ellis 2007) over top-K AC candidates."""
         onset_env = librosa.onset.onset_strength(
             y=y, sr=sr, hop_length=self.cfg.audio.beat_hop_length
         )
         fps = sr / self.cfg.audio.beat_hop_length
         N = len(onset_env)
 
-        if tempo is None:
-            tempo = self._estimate_tempo_from_env(onset_env, fps)
-
         lag_min = max(1, int(np.ceil(60.0 / self.cfg.beat.tempo_max * fps)))
         lag_max = int(np.floor(60.0 / self.cfg.beat.tempo_min * fps))
-        lag = int(np.clip(int(round(60.0 * fps / tempo)), lag_min, lag_max))
 
+        # Candidate lags: top-K AC local maxima + external hint + octave alternatives.
+        # Using multiple starting points lets the DP escape a wrong initial tempo.
+        base_lags = self._ac_top_k_lags(onset_env, fps, top_k=4)
+        if tempo is not None:
+            base_lags.append(int(np.clip(round(60.0 * fps / tempo), lag_min, lag_max)))
+
+        candidate_lags: set[int] = set()
+        for lag in base_lags:
+            lag = int(np.clip(lag, lag_min, lag_max))
+            candidate_lags.add(lag)
+            if lag // 2 >= lag_min:
+                candidate_lags.add(lag // 2)
+            if lag * 2 <= lag_max:
+                candidate_lags.add(lag * 2)
+
+        best_beats: list[int] = []
+        best_score = -np.inf
+        best_lag = min(candidate_lags)
+
+        for lag in candidate_lags:
+            beats = self._dp_run(onset_env, N, lag)
+            if beats:
+                s = float(np.mean(onset_env[np.array(beats)]))
+                if s > best_score:
+                    best_score = s
+                    best_beats = beats
+                    best_lag = lag
+
+        if not best_beats:
+            best_beats = [0]
+
+        return (
+            librosa.frames_to_time(
+                np.array(best_beats, dtype=int), sr=sr,
+                hop_length=self.cfg.audio.beat_hop_length
+            ),
+            60.0 * fps / best_lag,
+        )
+
+    def _dp_run(self, onset_env: np.ndarray, N: int, lag: int) -> list[int]:
+        """Run DP trellis for one lag hypothesis; return beat frame indices."""
         alpha = self.cfg.beat.dp_alpha
-        lo_off = max(1, lag // 2)   # minimum inter-beat distance
+        lo_off = max(1, lag // 2)
         window_size = 2 * lag - lo_off + 1
 
-        # Precompute transition weights for the steady-state window.
-        # In steady state lo = t - 2*lag, so candidate index i has
-        # delta = 2*lag - i.  The log-Gaussian cost is -alpha*(log δ/lag)².
         trans_buf = -alpha * np.log(
             np.arange(2 * lag, lo_off - 1, -1, dtype=float) / lag
         ) ** 2
@@ -93,17 +127,13 @@ class BeatTracker:
                 continue
             n = hi - lo + 1
             cands = score[lo : hi + 1]
-            if n == window_size:
-                combined = cands + trans_buf
-            else:
-                # Ramp-up: deltas run from t-lo down to lo_off
-                deltas = t - np.arange(lo, hi + 1, dtype=float)
-                combined = cands + (-alpha * np.log(deltas / lag) ** 2)
+            combined = (cands + trans_buf if n == window_size
+                        else cands + (-alpha * np.log(
+                            (t - np.arange(lo, hi + 1, dtype=float)) / lag) ** 2))
             best = int(np.argmax(combined))
             back[t] = lo + best
             score[t] = onset_env[t] + combined[best]
 
-        # Backtrack from the frame with the highest cumulative score
         t = int(np.argmax(score))
         beats: list[int] = []
         visited: set[int] = set()
@@ -111,27 +141,30 @@ class BeatTracker:
             visited.add(t)
             beats.append(t)
             t = int(back[t])
-
         beats.sort()
-        return (
-            librosa.frames_to_time(
-                np.array(beats, dtype=int), sr=sr,
-                hop_length=self.cfg.audio.beat_hop_length
-            ),
-            float(tempo),
-        )
+        return beats
 
-    def _estimate_tempo_from_env(self, onset_env: np.ndarray, fps: float) -> float:
-        """Autocorrelation tempo estimation (L05 slide 23)."""
+    def _ac_top_k_lags(self, onset_env: np.ndarray, fps: float, top_k: int = 4) -> list[int]:
+        """Top-k beat lags from autocorrelation local maxima (vectorised, no library)."""
         N = len(onset_env)
         lag_min = max(1, int(np.ceil(60.0 / self.cfg.beat.tempo_max * fps)))
         lag_max = min(int(np.floor(60.0 / self.cfg.beat.tempo_min * fps)), N // 2)
         lags = np.arange(lag_min, lag_max + 1)
+
         r = np.correlate(onset_env, onset_env, mode='full')
-        r = r[N - 1:]
-        r_norm = r[lags] / (N - lags.astype(float) + 1e-10)
-        best_lag = int(lags[np.argmax(r_norm)])
-        return 60.0 * fps / best_lag
+        r_norm = r[N - 1:][lags] / (N - lags.astype(float) + 1e-10)
+
+        # Local maxima via vectorised comparison — arithmetic, not a musical decision
+        is_peak = np.zeros(len(r_norm), dtype=bool)
+        is_peak[1:-1] = (r_norm[1:-1] > r_norm[:-2]) & (r_norm[1:-1] > r_norm[2:])
+        peak_lags = lags[is_peak]
+        peak_vals = r_norm[is_peak]
+
+        if len(peak_lags) == 0:
+            return [int(lags[np.argmax(r_norm)])]
+
+        top_idx = np.argsort(peak_vals)[::-1][:top_k]
+        return [int(peak_lags[i]) for i in top_idx]
 
 
 class TempoEstimator:
@@ -184,20 +217,18 @@ class Pipeline:
         self.tempo_estimator = TempoEstimator(cfg)
     
     def process_file(self, y: np.ndarray, sr: int) -> Tuple[np.ndarray, np.ndarray, List[float]]:
-        """
-        Process a single audio file.
-        
-        Returns:
-            (onsets, beats, tempos)
-        """
-        # Estimate tempo first
-        tempos = self.tempo_estimator.estimate(y, sr)
-        primary_tempo = tempos[0]
-        
-        # Detect onsets
+        """Process one file: onset detection + multi-hypothesis beat/tempo."""
         onsets = self.onset_detector.detect(y, sr)
-        
-        # Track beats using estimated tempo
-        beats, _ = self.beat_tracker.track(y, sr, tempo=primary_tempo)
-        
+
+        # Beat tracker finds the best lag across multiple AC hypotheses;
+        # tempo is derived from that lag (coherent with the returned beats).
+        beats, beat_bpm = self.beat_tracker.track(y, sr)
+
+        if beat_bpm * 2 <= self.cfg.beat.tempo_max:
+            tempos = [float(beat_bpm), float(beat_bpm * 2)]
+        elif beat_bpm / 2 >= self.cfg.beat.tempo_min:
+            tempos = [float(beat_bpm / 2), float(beat_bpm)]
+        else:
+            tempos = [float(beat_bpm)]
+
         return onsets, beats, tempos
