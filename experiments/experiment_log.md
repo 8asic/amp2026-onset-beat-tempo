@@ -151,4 +151,59 @@ KEEP. Onset and tempo improvements are large. Beat tracking is the clear next ta
 - Next experiment: DP beat tracker (see backlog EXP-002)
 
 ---
+
+## EXP-002 — Dynamic Programming Beat Tracker
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-002 |
+| **Date** | 2026-06-11 |
+| **Status** | COMPLETED — submission ready |
+| **Git commit (before)** | 45e38bb |
+| **Git commit (after)** | adb976e |
+
+### Files Modified
+- `src/detectors.py` — replaced `BeatTracker.track()` uniform grid with Ellis (2007) DP trellis
+- `src/config.py` — replaced unused `BeatConfig.tightness` with `dp_alpha=100.0`
+- **Reverted:** `src/features.py` — 99th-percentile ODF normalisation was tried and reverted;
+  it hurt onset F1 at threshold=0.01 (gamma=100 log compression already limits dynamic range;
+  optimal threshold would shift, requiring re-sweep — deferred to EXP-004)
+
+### Validation Results (127 files, threshold=0.01)
+| Metric | Score | N files | vs EXP-001 |
+|--------|-------|---------|------------|
+| Onset F1 | 0.7824 | 127 | 0 |
+| Beat F1 | **0.4960** | 127 | **+0.117** |
+| Tempo p-score | 0.5844 | 127 | 0 |
+| **Mean** | **0.6210** | 127 | **+0.039** |
+
+Processing time: 74 ms/file (9.4s for 127 files) — acceptable.
+
+### Leaderboard Results
+| Metric | Score |
+|--------|-------|
+| Onset F1 | *fill in* |
+| Beat F1 | *fill in* |
+| Tempo | *fill in* |
+| Mean | *fill in* |
+
+### Analysis
+The DP trellis aligns beats to high-energy onset frames rather than placing
+them on a rigid uniform grid. This handles:
+- Pieces with slight tempo variation (the score function absorbs small deviations)
+- Files where the autocorrelation tempo estimate was off (the trellis can
+  implicitly correct via the log-Gaussian search window [lag/2, 2*lag])
+- Silences and sparse textures (no onset evidence = no strong beat placement)
+
+Beat F1 improved +31% relative (+0.117 absolute) — the largest single-metric
+gain in any experiment so far.
+
+### Decision
+KEEP. Substantial improvement. Submit when notebook is re-run.
+
+### Next Actions
+- Upload submission to challenge server
+- Next experiments: EXP-003 (γ/μ sweep), EXP-004 (dp_alpha sweep)
+
+---
 <!-- Add new entries below this line -->

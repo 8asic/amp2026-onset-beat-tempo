@@ -137,13 +137,13 @@ Tempo GT format: `[t_lo, t_hi, w]` where `w` is the annotator weight for
 
 | Metric | Validation (127 files) | Leaderboard |
 |--------|----------------------|-------------|
-| Onset F1 | 0.7824 (EXP-001) | *fill in* |
-| Beat F1 | 0.3791 (EXP-001) | *fill in* |
-| Tempo p-score | 0.5844 (EXP-001) | *fill in* |
-| Mean | **0.5820** (EXP-001) | *fill in* |
+| Onset F1 | 0.7824 (EXP-002) | *fill in* |
+| Beat F1 | **0.4960** (EXP-002) | *fill in* |
+| Tempo p-score | 0.5844 (EXP-002) | *fill in* |
+| Mean | **0.6210** (EXP-002) | *fill in* |
 
 Baseline (EXP-000, 20-file split): Onset=0.4318, Beat=0.3855, Tempo=0.3250, Mean=0.3808
-EXP-001 config: threshold=0.01, method=superflux, onset_hop_length=256, superflux_gamma=100, superflux_mu=3
+EXP-002 config: threshold=0.01, method=superflux, onset_hop_length=256, superflux_gamma=100, superflux_mu=3, dp_alpha=100
 Best sweep result (not yet submitted): Onset=0.6153 at threshold=0.08
 
 ## Experiment Tracking
