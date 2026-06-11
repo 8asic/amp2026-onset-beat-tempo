@@ -82,32 +82,25 @@ def load_beats_gt(path: Path) -> List[float]:
     return load_onsets_gt(path)
 
 
-def load_tempo_gt(path: Path) -> List[float]:
-    """
-    Load tempo ground truth from file.
-    Returns list of tempos (may have 1 or 2 values).
-    Handles tab-separated format if present.
-    """
+def load_tempo_gt(path) -> list:
+    from pathlib import Path
+    path = Path(path)
     if not path.exists():
         return []
-    
-    with open(path, 'r') as f:
-        content = f.read().strip()
-        if not content:
-            return []
-        
-        # Split by whitespace (handles spaces, tabs, newlines)
-        parts = list(map(float, content.split()))
-        
-        if len(parts) == 1:
-            return [parts[0]]
-        elif len(parts) == 2:
-            # Two tempos without weight
-            return [parts[0], parts[1]]
-        elif len(parts) == 3:
-            # Two tempos with weight
-            return [parts[0], parts[1]]
+    content = path.read_text().strip()
+    if not content:
         return []
+    parts = content.split()
+    try:
+        if len(parts) == 1:
+            return [float(parts[0])]
+        elif len(parts) == 2:
+            return [float(parts[0]), float(parts[1])]
+        elif len(parts) >= 3:
+            return [float(parts[0]), float(parts[1]), float(parts[2])]
+    except ValueError:
+        return []
+    return []
 
 
 def get_git_commit() -> str:
