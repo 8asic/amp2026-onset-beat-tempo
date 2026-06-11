@@ -18,51 +18,53 @@ class OnsetDetector:
     
     def detect(self, y: np.ndarray, sr: int) -> np.ndarray:
         """
-        Detect onsets in audio.
-        
-        Args:
-            y: Audio signal
-            sr: Sample rate
-        
-        Returns:
-            Onset times in seconds
+        Detect onsets using superflux detection function + custom LFSF peak picking.
+        Implements the three conditions from L04 slide 64 (Böck et al. 2012).
         """
-        # Compute onset strength
-        strength = self.fe.onset_strength(
-            y, 
-            method=self.cfg.onset.method
-        )
-        
-        # Adaptive threshold
-        threshold = self._adaptive_threshold(strength)
-        
-        # Find peaks
-        peaks = find_peaks(
-            strength,
-            height=threshold,
-            distance=self.cfg.onset.peak_distance
-        )[0]
-        
-        # Convert frames to time
-        onset_times = librosa.frames_to_time(
-            peaks,
+        strength = self.fe.onset_strength(y, method=self.cfg.onset.method)
+        fps = sr / self.cfg.audio.onset_hop_length
+        N = len(strength)
+
+        # Window sizes in frames, scaled to hop size (1 frame ≈ 23ms at 512/22050)
+        # pre_max/post_max: local maximum window (~30ms each side)
+        # pre_avg/post_avg: mean window for adaptive threshold (~100ms each side)
+        # wait:             minimum IOI (~50ms = eval window tolerance)
+        w_max = max(1, int(round(0.030 * fps)))   # ~30ms
+        w_avg = max(1, int(round(0.100 * fps)))   # ~100ms
+        wait  = max(1, int(round(0.050 * fps)))   # ~50ms
+
+        delta = self.cfg.onset.threshold
+
+        peaks = []
+        last_onset = -wait - 1
+
+        for n in range(N):
+            x = strength[n]
+
+            # Condition 1: local maximum in window [n-w_max, n+w_max]
+            lo = max(0, n - w_max)
+            hi = min(N, n + w_max + 1)
+            if x < strength[lo:hi].max():
+                continue
+
+            # Condition 2: greater than mean in window [n-w_avg, n+w_avg] plus delta
+            lo_avg = max(0, n - w_avg)
+            hi_avg = min(N, n + w_avg + 1)
+            if x < strength[lo_avg:hi_avg].mean() + delta:
+                continue
+
+            # Condition 3: minimum distance from last accepted onset
+            if n - last_onset <= wait:
+                continue
+
+            peaks.append(n)
+            last_onset = n
+
+        return librosa.frames_to_time(
+            np.array(peaks, dtype=int),
             sr=sr,
             hop_length=self.cfg.audio.onset_hop_length
         )
-        
-        return onset_times
-    
-    def _adaptive_threshold(self, strength: np.ndarray) -> float:
-        """Compute adaptive threshold based on moving mean."""
-        window = int(0.5 * self.cfg.audio.sample_rate / self.cfg.audio.onset_hop_length)
-        if window % 2 == 0:
-            window += 1
-        
-        # Simple moving mean
-        kernel = np.ones(window) / window
-        moving_mean = np.convolve(strength, kernel, mode='same')
-        
-        return moving_mean + self.cfg.onset.threshold
 
 
 class BeatTracker:
@@ -72,77 +74,44 @@ class BeatTracker:
         self.cfg = cfg or config
     
     def track(self, y: np.ndarray, sr: int, tempo: Optional[float] = None) -> Tuple[np.ndarray, float]:
-        """
-        Track beats in audio.
-        
-        Args:
-            y: Audio signal
-            sr: Sample rate
-            tempo: Optional tempo estimate (auto-detected if None)
-        
-        Returns:
-            (beat_times, estimated_tempo)
-        """
-        # Compute onset envelope
+        """Beat tracking via autocorrelation (L05 slides 20-31)."""
         onset_env = librosa.onset.onset_strength(
-            y=y,
-            sr=sr,
-            hop_length=self.cfg.audio.beat_hop_length
+            y=y, sr=sr, hop_length=self.cfg.audio.beat_hop_length
         )
-        
-        # Estimate tempo if not provided
+        fps = sr / self.cfg.audio.beat_hop_length
+        N = len(onset_env)
+
         if tempo is None:
-            # Use librosa's tempo function (different parameter names in older versions)
-            try:
-                # Try newer librosa (>=0.10)
-                tempo = librosa.beat.tempo(
-                    onset_envelope=onset_env,
-                    sr=sr,
-                    hop_length=self.cfg.audio.beat_hop_length,
-                    start_bpm=self.cfg.beat.tempo_min,
-                    end_bpm=self.cfg.beat.tempo_max
-                )[0]
-            except TypeError:
-                # Fallback for older librosa
-                tempo = librosa.beat.tempo(
-                    onset_envelope=onset_env,
-                    sr=sr,
-                    hop_length=self.cfg.audio.beat_hop_length,
-                    start_bpm=self.cfg.beat.tempo_min
-                )[0]
-            
-            if isinstance(tempo, np.ndarray):
-                tempo = float(tempo[0]) if len(tempo) > 0 else 120.0
-        
-        # Detect beats
-        try:
-            # Try newer librosa
-            beat_frames = librosa.beat.beat_track(
-                onset_envelope=onset_env,
-                sr=sr,
-                hop_length=self.cfg.audio.beat_hop_length,
-                start_bpm=tempo,
-                tightness=self.cfg.beat.tightness,
-                trim=False
-            )[1]
-        except TypeError:
-            # Fallback for older librosa
-            beat_frames = librosa.beat.beat_track(
-                onset_envelope=onset_env,
-                sr=sr,
-                hop_length=self.cfg.audio.beat_hop_length,
-                start_bpm=tempo,
-                tightness=self.cfg.beat.tightness
-            )[1]
-        
-        # Convert to time
+            tempo = self._estimate_tempo_from_env(onset_env, fps)
+
+        best_lag = max(1, int(round(60.0 * fps / tempo)))
+        lag_min = max(1, int(np.ceil(60.0 / self.cfg.beat.tempo_max * fps)))
+        lag_max = int(np.floor(60.0 / self.cfg.beat.tempo_min * fps))
+        best_lag = int(np.clip(best_lag, lag_min, lag_max))
+
+        scores = np.array([
+            onset_env[np.arange(ph, N, best_lag)].sum()
+            for ph in range(best_lag)
+        ])
+        best_phase = int(np.argmax(scores))
+
+        beat_frames = np.arange(best_phase, N, best_lag)
         beat_times = librosa.frames_to_time(
-            beat_frames,
-            sr=sr,
-            hop_length=self.cfg.audio.beat_hop_length
+            beat_frames, sr=sr, hop_length=self.cfg.audio.beat_hop_length
         )
-        
         return beat_times, float(tempo)
+
+    def _estimate_tempo_from_env(self, onset_env: np.ndarray, fps: float) -> float:
+        """Autocorrelation tempo estimation (L05 slide 23)."""
+        N = len(onset_env)
+        lag_min = max(1, int(np.ceil(60.0 / self.cfg.beat.tempo_max * fps)))
+        lag_max = min(int(np.floor(60.0 / self.cfg.beat.tempo_min * fps)), N // 2)
+        lags = np.arange(lag_min, lag_max + 1)
+        r = np.correlate(onset_env, onset_env, mode='full')
+        r = r[N - 1:]
+        r_norm = r[lags] / (N - lags.astype(float) + 1e-10)
+        best_lag = int(lags[np.argmax(r_norm)])
+        return 60.0 * fps / best_lag
 
 
 class TempoEstimator:
@@ -153,46 +122,36 @@ class TempoEstimator:
     
     def estimate(self, y: np.ndarray, sr: int) -> List[float]:
         """
-        Estimate tempo(s) from audio.
-        
-        Returns:
-            List of 1-2 tempo estimates (primary, optional secondary)
+        Estimate tempo using autocorrelation of onset envelope (L05 slides 23-24).
         """
-        # Compute onset envelope
         onset_env = librosa.onset.onset_strength(
-            y=y,
-            sr=sr,
-            hop_length=self.cfg.audio.tempo_hop_length
+            y=y, sr=sr, hop_length=self.cfg.audio.tempo_hop_length
         )
+        fps = sr / self.cfg.audio.tempo_hop_length
+        N = len(onset_env)
+
+        bpm_min = self.cfg.beat.tempo_min
+        bpm_max = self.cfg.beat.tempo_max
+        lag_min = max(1, int(np.ceil(60.0 / bpm_max * fps)))
+        lag_max = min(int(np.floor(60.0 / bpm_min * fps)), N // 2)
+
+        lags = np.arange(lag_min, lag_max + 1)
+
+        r = np.correlate(onset_env, onset_env, mode='full')
+        r = r[N - 1:]
+        r_norm = r[lags] / (N - lags.astype(float) + 1e-10)
+
+        best_idx = int(np.argmax(r_norm))
+        best_lag = int(lags[best_idx])
+        primary_bpm = 60.0 * fps / best_lag
+
+        # Return primary tempo + octave alternative
+        if primary_bpm * 2 <= self.cfg.beat.tempo_max:
+            return [float(primary_bpm), float(primary_bpm * 2)]
+        elif primary_bpm / 2 >= self.cfg.beat.tempo_min:
+            return [float(primary_bpm / 2), float(primary_bpm)]
         
-        # Estimate tempo using librosa (handle different parameter names)
-        try:
-            # Try newer librosa (>=0.10) with end_bpm
-            tempo_fft = librosa.beat.tempo(
-                onset_envelope=onset_env,
-                sr=sr,
-                hop_length=self.cfg.audio.tempo_hop_length,
-                start_bpm=self.cfg.beat.tempo_min,
-                end_bpm=self.cfg.beat.tempo_max
-            )[0]
-        except TypeError:
-            # Fallback for older librosa without end_bpm
-            tempo_fft = librosa.beat.tempo(
-                onset_envelope=onset_env,
-                sr=sr,
-                hop_length=self.cfg.audio.tempo_hop_length,
-                start_bpm=self.cfg.beat.tempo_min
-            )[0]
-        
-        tempos = [float(tempo_fft)]
-        
-        # Check for half/double tempo as secondary
-        if tempo_fft * 2 <= self.cfg.beat.tempo_max:
-            tempos.append(float(tempo_fft * 2))
-        elif tempo_fft / 2 >= self.cfg.beat.tempo_min:
-            tempos.append(float(tempo_fft / 2))
-        
-        return tempos
+        return [float(primary_bpm)]
 
 
 class Pipeline:
