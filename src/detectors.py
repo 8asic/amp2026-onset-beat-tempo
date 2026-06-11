@@ -2,7 +2,6 @@
 
 import numpy as np
 import librosa
-from scipy.signal import find_peaks
 from typing import Tuple, Optional, List
 
 from .config import config
@@ -17,22 +16,14 @@ class OnsetDetector:
         self.fe = FeatureExtractor(cfg)
     
     def detect(self, y: np.ndarray, sr: int) -> np.ndarray:
-        """
-        Detect onsets using superflux detection function + custom LFSF peak picking.
-        Implements the three conditions from L04 slide 64 (Böck et al. 2012).
-        """
+        """Onset detection: superflux + custom LFSF peak picking (L04 slide 64)."""
         strength = self.fe.onset_strength(y, method=self.cfg.onset.method)
         fps = sr / self.cfg.audio.onset_hop_length
         N = len(strength)
 
-        # Window sizes in frames, scaled to hop size (1 frame ≈ 23ms at 512/22050)
-        # pre_max/post_max: local maximum window (~30ms each side)
-        # pre_avg/post_avg: mean window for adaptive threshold (~100ms each side)
-        # wait:             minimum IOI (~50ms = eval window tolerance)
-        w_max = max(1, int(round(0.030 * fps)))   # ~30ms
-        w_avg = max(1, int(round(0.100 * fps)))   # ~100ms
-        wait  = max(1, int(round(0.050 * fps)))   # ~50ms
-
+        w_max = max(1, int(round(0.030 * fps)))
+        w_avg = max(1, int(round(0.100 * fps)))
+        wait  = max(1, int(round(0.050 * fps)))
         delta = self.cfg.onset.threshold
 
         peaks = []
@@ -40,29 +31,21 @@ class OnsetDetector:
 
         for n in range(N):
             x = strength[n]
-
-            # Condition 1: local maximum in window [n-w_max, n+w_max]
             lo = max(0, n - w_max)
             hi = min(N, n + w_max + 1)
             if x < strength[lo:hi].max():
                 continue
-
-            # Condition 2: greater than mean in window [n-w_avg, n+w_avg] plus delta
             lo_avg = max(0, n - w_avg)
             hi_avg = min(N, n + w_avg + 1)
             if x < strength[lo_avg:hi_avg].mean() + delta:
                 continue
-
-            # Condition 3: minimum distance from last accepted onset
             if n - last_onset <= wait:
                 continue
-
             peaks.append(n)
             last_onset = n
 
         return librosa.frames_to_time(
-            np.array(peaks, dtype=int),
-            sr=sr,
+            np.array(peaks, dtype=int), sr=sr,
             hop_length=self.cfg.audio.onset_hop_length
         )
 
