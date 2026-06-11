@@ -2,7 +2,7 @@
 
 import numpy as np
 import librosa
-from scipy.ndimage import gaussian_filter1d
+from scipy.ndimage import gaussian_filter1d, maximum_filter1d
 
 from .config import config
 
@@ -40,35 +40,27 @@ class FeatureExtractor:
         return flux
     
     def superflux(self, y: np.ndarray) -> np.ndarray:
-        """
-        Compute superflux onset strength (better for complex music).
-        
-        Uses mel-scaled spectrogram with positive differences per band.
-        """
-        # Compute mel spectrogram
-        mel_spec = librosa.feature.melspectrogram(
+        """Real SuperFlux onset strength (Böck et al. ICASSP 2012)."""
+        mel = librosa.feature.melspectrogram(
             y=y,
             sr=self.sr,
             n_fft=self.cfg.audio.onset_fft_size,
             hop_length=self.cfg.audio.onset_hop_length,
-            n_mels=64,
+            n_mels=self.cfg.audio.onset_n_mels,
             fmin=self.cfg.audio.onset_fmin,
-            fmax=self.cfg.audio.onset_fmax
+            fmax=self.cfg.audio.onset_fmax,
         )
-        
-        # Log compression
-        mel_spec = np.log1p(mel_spec)
-        
-        # Positive differences per band, then sum
-        diff = np.diff(mel_spec, axis=1, prepend=mel_spec[:, 0:1])
-        positive_diff = np.maximum(diff, 0)
-        superflux_val = np.sum(positive_diff, axis=0)
-        
-        # Normalize
-        if superflux_val.max() > 0:
-            superflux_val = superflux_val / superflux_val.max()
-        
-        return superflux_val
+        log_mel = np.log1p(self.cfg.audio.superflux_gamma * mel)  # (n_mels, n_frames)
+        # Max filter along frequency axis: vibrato shifts energy between adjacent
+        # frequency bins at the same time instant, so comparing against the
+        # per-bin neighbourhood max suppresses vibrato false positives.
+        max_filt = maximum_filter1d(log_mel, size=self.cfg.audio.superflux_mu, axis=0)
+        diff = log_mel[:, 1:] - max_filt[:, :-1]
+        diff = np.pad(diff, ((0, 0), (1, 0)), mode='constant')
+        odf = np.sum(np.maximum(diff, 0), axis=0)
+        if odf.max() > 0:
+            odf /= odf.max()
+        return odf
     
     def onset_strength(self, y: np.ndarray, method: str = "superflux") -> np.ndarray:
         """Compute onset strength using specified method."""

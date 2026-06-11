@@ -10,18 +10,21 @@ class AudioConfig:
     """Audio processing parameters."""
     sample_rate: int = 22050
     hop_length: int = 512
-    onset_hop_length: int = 512
+    onset_hop_length: int = 256
     beat_hop_length: int = 512
     tempo_hop_length: int = 1024
     onset_fft_size: int = 2048
     onset_fmin: float = 30.0
-    onset_fmax: float = 17000.0
+    onset_fmax: float = 11000.0  # keep below Nyquist (sr/2 = 11025 for sr=22050)
+    onset_n_mels: int = 82
+    superflux_gamma: float = 100.0
+    superflux_mu: int = 3
 
 
 @dataclass
 class OnsetConfig:
     """Onset detection parameters."""
-    threshold: float = 0.08  # LOWER = more onsets (was 0.3)
+    threshold: float = 0.01  # tuned for Real SuperFlux + hop_length=256
     peak_distance: int = 2   # SMALLER = more peaks (was 3)
     smoothing_sigma: float = 1.0
     method: str = "superflux"  # or "flux"
