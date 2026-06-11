@@ -310,4 +310,61 @@ KEEP. Small but clean improvement with no side effects. Update config defaults.
 - Next: EXP-005 (99th-percentile ODF norm) or EXP-007 (fixed multi-hypothesis)
 
 ---
+## EXP-005 — Tight-Window Gaussian DP Beat Tracker
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-005 |
+| **Date** | 2026-06-11 |
+| **Status** | COMPLETED |
+| **Git commit (before)** | 969af5c |
+| **Git commit (after)** | 417f6b4 |
+
+### Motivation
+Teammate audit: their Beat F1=0.7322 using a DP with `transition_width=0.10,
+transition_lambda=2.0`. Our Ellis DP uses a wide window [lag/2, 2*lag] (±50%),
+while their tight window is ±10%. Key insight: forcing stronger tempo regularity
+produces more accurate beat sequences when the initial tempo estimate is correct.
+
+### Files Modified
+- `src/config.py` — added `dp_transition_width=0.10`, `dp_transition_lambda=1.0`
+- `src/detectors.py` — `BeatTracker.track()`: replaced Ellis log-Gaussian DP with
+  tight Gaussian DP. Search window [lag*(1-w), lag*(1+w)], penalty -lambda*((delta-lag)/(w*lag))^2
+
+### Sweep Results
+Width ∈ {0.05, 0.10, 0.15, 0.20, 0.25} × Lambda ∈ {0.5, 1, 2, 4, 8}
+(25 configs on 127 files, ~5s each)
+
+| width | lambda | beat F1 |
+|-------|--------|---------|
+| 0.10 | 0.5 | 0.5154 |
+| **0.10** | **1.0** | **0.5160** |
+| 0.10 | 2.0 | 0.5133 |
+| 0.05 | 0.5 | 0.5068 |
+| 0.15 | 8.0 | 0.5136 |
+
+### Validation Results (127 files)
+| Metric | Score | vs EXP-004 |
+|--------|-------|------------|
+| Onset F1 | 0.7866 | 0 |
+| Beat F1 | **0.5160** | **+0.020** |
+| Tempo p-score | 0.5844 | 0 |
+| **Mean** | **0.6290** | **+0.0066** |
+
+### Analysis
+Tight window forces tempo regularity — beats must stay within ±10% of the
+expected period, preventing the DP from drifting to wrong metrical levels.
+The remaining gap vs teammate (0.5160 vs 0.7322) is likely due to:
+1. Their 26-file vs our 127-file validation set (variance)
+2. Their better tempo estimator (0.6346 vs our 0.5844) feeding the DP
+3. Their log_mel_flux activation for DP (vs librosa onset_strength)
+
+### Decision
+KEEP. Clean +0.020 beat F1 improvement, no regressions.
+
+### Next Actions
+- Try log_mel_flux / SuperFlux activation for beat tracking DP
+- Try pair-based tempo estimator from teammate approach
+
+---
 <!-- Add new entries below this line -->
