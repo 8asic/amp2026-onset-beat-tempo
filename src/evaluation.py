@@ -50,7 +50,7 @@ class Evaluator:
                     np.array(reference),
                     np.array(estimated)
                 )
-            except:
+            except Exception:
                 return 0.0
         return f
     
@@ -78,14 +78,14 @@ class Evaluator:
                 try:
                     score = mir_eval.tempo.evaluate(reference, estimated)[0]
                     return score
-                except:
+                except Exception:
                     # Simple check: is either estimated tempo within tolerance of either reference?
                     for ref in reference:
                         for est in estimated:
                             if abs(est - ref) / ref <= tolerance:
                                 return 1.0
                     return 0.0
-        except:
+        except Exception:
             return 0.0
     
     @staticmethod
