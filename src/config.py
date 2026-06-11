@@ -36,7 +36,9 @@ class BeatConfig:
     """Beat tracking parameters."""
     tempo_min: float = 30.0
     tempo_max: float = 200.0
-    dp_alpha: float = 100.0   # DP tightness: cost of deviating from expected lag
+    dp_alpha: float = 100.0          # Ellis DP tightness (kept for reference)
+    dp_transition_width: float = 0.10  # tight window: ±fraction of beat period
+    dp_transition_lambda: float = 1.0  # Gaussian penalty strength
     eval_window_ms: float = 70.0
 
 
