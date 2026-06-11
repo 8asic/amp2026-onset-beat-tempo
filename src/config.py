@@ -34,9 +34,9 @@ class OnsetConfig:
 @dataclass
 class BeatConfig:
     """Beat tracking parameters."""
-    tempo_min: float = 30.0   # LOWER to catch slow tempos (was 55)
-    tempo_max: float = 200.0  # (was 215)
-    tightness: float = 60.0
+    tempo_min: float = 30.0
+    tempo_max: float = 200.0
+    dp_alpha: float = 100.0   # DP tightness: cost of deviating from expected lag
     eval_window_ms: float = 70.0
 
 

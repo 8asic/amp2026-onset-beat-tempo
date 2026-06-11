@@ -57,7 +57,7 @@ class BeatTracker:
         self.cfg = cfg or config
     
     def track(self, y: np.ndarray, sr: int, tempo: Optional[float] = None) -> Tuple[np.ndarray, float]:
-        """Beat tracking via autocorrelation (L05 slides 20-31)."""
+        """Beat tracking via dynamic programming trellis (Ellis 2007)."""
         onset_env = librosa.onset.onset_strength(
             y=y, sr=sr, hop_length=self.cfg.audio.beat_hop_length
         )
@@ -67,22 +67,59 @@ class BeatTracker:
         if tempo is None:
             tempo = self._estimate_tempo_from_env(onset_env, fps)
 
-        best_lag = max(1, int(round(60.0 * fps / tempo)))
         lag_min = max(1, int(np.ceil(60.0 / self.cfg.beat.tempo_max * fps)))
         lag_max = int(np.floor(60.0 / self.cfg.beat.tempo_min * fps))
-        best_lag = int(np.clip(best_lag, lag_min, lag_max))
+        lag = int(np.clip(int(round(60.0 * fps / tempo)), lag_min, lag_max))
 
-        scores = np.array([
-            onset_env[np.arange(ph, N, best_lag)].sum()
-            for ph in range(best_lag)
-        ])
-        best_phase = int(np.argmax(scores))
+        alpha = self.cfg.beat.dp_alpha
+        lo_off = max(1, lag // 2)   # minimum inter-beat distance
+        window_size = 2 * lag - lo_off + 1
 
-        beat_frames = np.arange(best_phase, N, best_lag)
-        beat_times = librosa.frames_to_time(
-            beat_frames, sr=sr, hop_length=self.cfg.audio.beat_hop_length
+        # Precompute transition weights for the steady-state window.
+        # In steady state lo = t - 2*lag, so candidate index i has
+        # delta = 2*lag - i.  The log-Gaussian cost is -alpha*(log δ/lag)².
+        trans_buf = -alpha * np.log(
+            np.arange(2 * lag, lo_off - 1, -1, dtype=float) / lag
+        ) ** 2
+
+        score = onset_env.copy().astype(float)
+        back = np.arange(N, dtype=int)
+
+        for t in range(1, N):
+            lo = max(0, t - 2 * lag)
+            hi = t - lo_off
+            if hi < 0 or lo > hi:
+                back[t] = max(0, t - lag)
+                continue
+            n = hi - lo + 1
+            cands = score[lo : hi + 1]
+            if n == window_size:
+                combined = cands + trans_buf
+            else:
+                # Ramp-up: deltas run from t-lo down to lo_off
+                deltas = t - np.arange(lo, hi + 1, dtype=float)
+                combined = cands + (-alpha * np.log(deltas / lag) ** 2)
+            best = int(np.argmax(combined))
+            back[t] = lo + best
+            score[t] = onset_env[t] + combined[best]
+
+        # Backtrack from the frame with the highest cumulative score
+        t = int(np.argmax(score))
+        beats: list[int] = []
+        visited: set[int] = set()
+        while t not in visited:
+            visited.add(t)
+            beats.append(t)
+            t = int(back[t])
+
+        beats.sort()
+        return (
+            librosa.frames_to_time(
+                np.array(beats, dtype=int), sr=sr,
+                hop_length=self.cfg.audio.beat_hop_length
+            ),
+            float(tempo),
         )
-        return beat_times, float(tempo)
 
     def _estimate_tempo_from_env(self, onset_env: np.ndarray, fps: float) -> float:
         """Autocorrelation tempo estimation (L05 slide 23)."""

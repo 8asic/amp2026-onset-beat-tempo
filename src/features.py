@@ -59,7 +59,10 @@ class FeatureExtractor:
         diff = np.pad(diff, ((0, 0), (1, 0)), mode='constant')
         odf = np.sum(np.maximum(diff, 0), axis=0)
         if odf.max() > 0:
-            odf /= odf.max()
+            # 99th-percentile divisor: prevents one loud onset from compressing
+            # all weaker onsets toward zero (max normalisation artefact).
+            p99 = float(np.percentile(odf, 99))
+            odf /= p99 if p99 > 0 else odf.max()
         return odf
     
     def onset_strength(self, y: np.ndarray, method: str = "superflux") -> np.ndarray:
