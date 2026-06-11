@@ -1,7 +1,10 @@
 """Utility functions for file handling and extraction."""
 
+import json
+import subprocess
 import zipfile
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
@@ -105,3 +108,46 @@ def load_tempo_gt(path: Path) -> List[float]:
             # Two tempos with weight
             return [parts[0], parts[1]]
         return []
+
+
+def get_git_commit() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip()
+    except Exception:
+        return "no-git"
+
+
+def save_versioned_submission(
+    predictions: dict,
+    submissions_dir,
+    experiment_id: str,
+    val_scores: dict = None,
+    notes: str = "",
+):
+    submissions_dir = Path(submissions_dir)
+    commit = get_git_commit()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = submissions_dir / f"{experiment_id}_{timestamp}_{commit}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    pred_path = run_dir / "predictions.json"
+    with open(pred_path, "w") as f:
+        json.dump(predictions, f, indent=2)
+
+    metadata = {
+        "experiment_id": experiment_id,
+        "timestamp": timestamp,
+        "git_commit": commit,
+        "val_scores": val_scores or {},
+        "notes": notes,
+        "n_test_files": len(predictions),
+    }
+    with open(run_dir / "metadata.json", "w") as f:
+        json.dump(metadata, f, indent=2)
+
+    print(f"Saved: {pred_path}")
+    return pred_path
