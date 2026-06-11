@@ -138,9 +138,9 @@ Tempo GT format: `[t_lo, t_hi, w]` where `w` is the annotator weight for
 | Metric | Validation (127 files) | Leaderboard |
 |--------|----------------------|-------------|
 | Onset F1 | **0.7866** (EXP-004) | *fill in* |
-| Beat F1 | **0.5160** (EXP-005) | *fill in* |
-| Tempo p-score | **0.5958** (EXP-005, corrected) | *fill in* |
-| Mean | **0.6328** (EXP-005, corrected) | *fill in* |
+| Beat F1 | **0.5359** (EXP-006) | *fill in* |
+| Tempo p-score | **0.5958** (EXP-005) | *fill in* |
+| Mean | **0.6394** (EXP-006) | *fill in* |
 
 Baseline (EXP-000, 20-file split): Onset=0.4318, Beat=0.3855, Tempo=0.3250, Mean=0.3808
 EXP-005 config: threshold=0.011, method=superflux, onset_hop_length=256, superflux_gamma=200, superflux_mu=3, dp_transition_width=0.10, dp_transition_lambda=1.0
