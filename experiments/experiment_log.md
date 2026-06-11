@@ -206,4 +206,43 @@ KEEP. Substantial improvement. Submit when notebook is re-run.
 - Next experiments: EXP-003 (γ/μ sweep), EXP-004 (dp_alpha sweep)
 
 ---
+## EXP-003 — Multi-Hypothesis Beat Tracker (REJECTED)
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-003 |
+| **Date** | 2026-06-11 |
+| **Status** | REJECTED — regression, reverted |
+| **Git commit (before)** | adb976e |
+| **Git commit (after)** | 098fc3c (revert) |
+
+### Files Modified
+- `src/detectors.py` — `BeatTracker.track()` replaced with multi-hypothesis: top-4 AC peaks + octave alternatives, winner selected by `mean(onset_env[beats])`
+- `Pipeline.process_file()` — removed `TempoEstimator` call, derived tempo from winning beat lag
+
+### Validation Results (127 files)
+| Metric | EXP-003 | EXP-002 | Delta |
+|--------|---------|---------|-------|
+| Onset F1 | 0.7824 | 0.7824 | 0 |
+| Beat F1 | **0.4339** | 0.4960 | **-0.062** |
+| Tempo | **0.4437** | 0.5844 | **-0.141** |
+| Mean | **0.5533** | 0.6210 | **-0.068** |
+
+### Failure Analysis
+1. **Winner selection bias:** `mean(onset_env[beats])` biases toward half-tempo hypotheses. Sparser beat grids that hit only the strongest onset frames score higher per beat than full-tempo grids that track every beat (including weaker ones). For 15/20 debug files, multi-hypothesis chose a wrong candidate, most often the half-tempo of the correct lag.
+
+2. **Tempo regression:** Deriving tempo from the winning beat-lag (which was often wrong) also corrupted tempo output. The dedicated `TempoEstimator` at `tempo_hop_length=1024` was more accurate.
+
+3. **Root cause of winner selection flaw:** Any per-beat mean metric favours sparse hypotheses. Better alternatives (not yet tested):
+   - Use total DP score (`max(score)`) without normalisation — biases toward full-tempo but correct direction
+   - Use `max(score) / (N / lag)` — normalised per "beat opportunity", accounts for expected beat count
+   - Prefer the AC argmax by default; only switch if alternative scores >20% better
+
+### Decision
+REJECTED. Reverted to EXP-002 state. Will revisit with a corrected winner selection in a later experiment.
+
+### Next Actions
+- Continue with γ/μ sweep (was EXP-003 in backlog, now becomes EXP-004)
+
+---
 <!-- Add new entries below this line -->

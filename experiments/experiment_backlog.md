@@ -10,16 +10,16 @@
 
 | Rank | ID | Title | Expected Gain | Confidence | Effort | Risk |
 |------|----|-------|---------------|------------|--------|------|
-| 1 | EXP-002 | DP beat tracker (Viterbi trellis) | +0.10–0.20 beat F1 | High | Hard | Medium |
-| 2 | EXP-003 | γ and μ sweep on 127 files | +0.01–0.03 onset F1 | High | Easy | None |
-| 3 | EXP-004 | 99th-percentile ODF normalisation | +0.01–0.03 onset F1 | Medium | Easy | Low |
-| 4 | EXP-005 | HPSS soft-mask + Real SuperFlux at hop=256 | +0.01–0.02 onset F1 | Medium | Moderate | Low |
-| 5 | EXP-006 | Windowed tempo re-estimation for beat tracking | +0.02–0.06 beat F1 | Medium | Moderate | Medium |
-| 6 | EXP-007 | Use Real SuperFlux envelope for beat tracking | +0.01–0.04 beat F1 | Low | Easy | Low |
+| 1 | EXP-004 | γ and μ sweep on 127 files | +0.01–0.03 onset F1 | High | Easy | None |
+| 2 | EXP-005 | 99th-percentile ODF normalisation | +0.01–0.03 onset F1 | Medium | Easy | Low |
+| 3 | EXP-006 | HPSS soft-mask + Real SuperFlux at hop=256 | +0.01–0.02 onset F1 | Medium | Moderate | Low |
+| 4 | EXP-007 | Multi-hypothesis beat (fixed winner: total DP score / N_beats) | +0.02–0.05 beat F1 | Medium | Moderate | Medium |
+| 5 | EXP-008 | Windowed tempo re-estimation for beat tracking | +0.02–0.06 beat F1 | Medium | Moderate | Medium |
+| 6 | EXP-009 | Use Real SuperFlux envelope for beat tracking | +0.01–0.04 beat F1 | Low | Easy | Low |
 
 ---
 
-## EXP-002 — Dynamic Programming Beat Tracker
+## EXP-002 — Dynamic Programming Beat Tracker [DONE — see experiment_log.md]
 
 ### Objective
 Replace the current uniform-grid autocorrelation beat tracker in
@@ -126,7 +126,7 @@ Beat F1 ≥ 0.45 on 127-file validation (vs current 0.3791, +0.07 minimum).
 
 ---
 
-## EXP-003 — γ and μ Sweep on 127 Files
+## EXP-004 — γ and μ Sweep on 127 Files
 
 ### Objective
 Sweep `superflux_gamma` over [50, 100, 200] and `superflux_mu` over [1, 2, 3, 5]
@@ -161,7 +161,7 @@ Identify γ and μ values that improve onset F1 ≥ 0.79 on 127 files.
 
 ---
 
-## EXP-004 — 99th-Percentile ODF Normalisation
+## EXP-005 — 99th-Percentile ODF Normalisation
 
 ### Objective
 In `FeatureExtractor.superflux()`, replace `odf /= odf.max()` with
@@ -204,7 +204,7 @@ Onset F1 ≥ 0.785 on 127-file validation (vs current 0.7824, any improvement co
 
 ---
 
-## EXP-005 — HPSS Soft-Mask + Real SuperFlux at hop=256
+## EXP-006 — HPSS Soft-Mask + Real SuperFlux at hop=256
 
 ### Objective
 Add HPSS-based percussive isolation before the mel spectrogram step in
@@ -249,7 +249,46 @@ Onset F1 ≥ 0.790 (vs 0.7824 baseline for this component).
 
 ---
 
-## EXP-006 — Windowed Tempo Re-Estimation
+## EXP-007 — Multi-Hypothesis Beat Tracker (Fixed Winner Selection)
+
+### Objective
+Retry multi-hypothesis beat tracking with a better winner scoring function.
+Instead of `mean(onset_env[beats])`, use total DP score normalised by
+expected beat count (`max(score) / (N / lag)`), which removes the half-tempo
+bias identified in EXP-003.
+
+### Rationale
+EXP-003 showed multi-hypothesis can help (ff123_ATrain: 0.030→0.200,
+ff123_BigYellow: 0.387→0.655) but the winner selection was flawed — it
+preferred half-tempo hypotheses because sparse beats on strong onset frames
+score higher per beat than dense beats on all frames.
+
+The correct scorer should reward hypotheses that collect MORE total onset
+energy (not higher per-beat energy). Options:
+- `max(score) / (N/lag)`: total DP score per "expected beat opportunity"
+- `max(score) * lag / N`: equivalent re-arrangement
+
+### Expected Gain
++0.02–0.05 beat F1 (if winner selection works; EXP-003 lost 0.062).
+
+### Confidence
+Medium — the theory is sound but the exact scorer needs empirical validation.
+
+### Effort
+Moderate — modify `_dp_run` to return `(beats, max_score)` and update `track()`.
+
+### Risk
+Medium — need to re-validate on 127 files.
+
+### Files to Modify
+`src/detectors.py` — `BeatTracker.track()` and `_dp_run()`.
+
+### Success Criteria
+Beat F1 ≥ 0.51 on 127 files (strictly better than EXP-002's 0.4960).
+
+---
+
+## EXP-008 — Windowed Tempo Re-Estimation
 
 ### Objective
 Instead of estimating a single global tempo for the whole file, re-estimate
@@ -281,7 +320,7 @@ Beat F1 ≥ 0.41 on 127 files without introducing regressions on high-F1 files.
 
 ---
 
-## EXP-007 — Use Real SuperFlux Envelope for Beat Tracking
+## EXP-009 — Use Real SuperFlux Envelope for Beat Tracking
 
 ### Objective
 Replace `librosa.onset.onset_strength` in `BeatTracker.track()` and

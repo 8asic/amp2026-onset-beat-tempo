@@ -17,14 +17,14 @@ class AudioConfig:
     onset_fmin: float = 30.0
     onset_fmax: float = 11000.0  # keep below Nyquist (sr/2 = 11025 for sr=22050)
     onset_n_mels: int = 82
-    superflux_gamma: float = 100.0
+    superflux_gamma: float = 200.0
     superflux_mu: int = 3
 
 
 @dataclass
 class OnsetConfig:
     """Onset detection parameters."""
-    threshold: float = 0.01  # tuned for Real SuperFlux + hop_length=256
+    threshold: float = 0.011  # tuned for gamma=200, mu=3, hop=256
     peak_distance: int = 2   # SMALLER = more peaks (was 3)
     smoothing_sigma: float = 1.0
     method: str = "superflux"  # or "flux"
