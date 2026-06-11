@@ -24,7 +24,7 @@ class AudioConfig:
 @dataclass
 class OnsetConfig:
     """Onset detection parameters."""
-    threshold: float = 0.001  # swept on 127 files: lower delta → better F1
+    threshold: float = 0.011  # F1-optimal on 127 files (peak at 0.011; lower delta raises recall but hurts precision)
     peak_distance: int = 2   # SMALLER = more peaks (was 3)
     smoothing_sigma: float = 1.0
     method: str = "superflux"  # or "flux"

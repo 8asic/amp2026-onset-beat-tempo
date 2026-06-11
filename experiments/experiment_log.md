@@ -421,23 +421,24 @@ Root-cause analysis showed 39% of training files had wrong tempo (AC predicting 
 - `src/config.py` — `threshold` 0.011→0.001 (swept, monotone improvement); added `BeatConfig.tempo_search_min=60.0`
 - `src/detectors.py` — `TempoEstimator.estimate()`: replaced `librosa.onset.onset_strength` at hop=1024 with log-mel flux at hop=512, search [60, 200] BPM, stores `_primary`; `Pipeline.process_file()`: pass `_primary` to beat tracker (avoids half-tempo input for high-BPM files)
 
-### Threshold Sweep
-| threshold | onset F1 |
-|-----------|---------|
-| 0.011 | 0.7243 |
-| 0.005 | 0.7501 |
-| 0.001 | **0.7606** |
-| 0.000 | 0.7628 |
+### Threshold Sweep (corrected: was measuring recall not F1)
+| threshold | onset F1 | precision | recall |
+|-----------|---------|-----------|--------|
+| 0.000 | 0.7419 | 0.7669 | 0.7628 |
+| 0.001 | 0.7557 | 0.7908 | 0.7606 |
+| 0.008 | 0.7850 | 0.8704 | 0.7375 |
+| **0.011** | **0.7866** | **0.8919** | **0.7243** |
+| 0.015 | 0.7830 | 0.9135 | 0.7050 |
 
-Chose 0.001 (marginal vs 0.000, safer on test set).
+F1 peaks at threshold=0.011. Earlier sweep was reporting recall (wrong variable order in standalone script — mir_eval.onset.f_measure returns (f_measure, precision, recall)).
 
 ### Validation Results (127 files)
 | Metric | Score | vs EXP-006 |
 |--------|-------|------------|
-| Onset F1 | **0.7606** | **+0.036** |
+| Onset F1 | **0.7866** | 0 |
 | Beat F1 | **0.6838** | **+0.148** |
 | Tempo p-score | **0.7269** | **+0.131** |
-| **Mean** | **0.7238** | **+0.105** |
+| **Mean** | **0.7325** | **+0.093** |
 
 ### Analysis
 The measure-level AC false peaks (34 BPM) were the single largest source of beat/tempo errors. Restricting tempo search to [60, 200] BPM with a better ODF (log-mel flux at hop=512 vs librosa's onset_strength at hop=1024) fixed 38 files and broke only 10 — net +28 files with correct tempo. Onset threshold lowering recovers false negatives that the adaptive mean peak picker was suppressing unnecessarily.
