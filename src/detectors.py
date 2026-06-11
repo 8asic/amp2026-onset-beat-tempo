@@ -58,9 +58,7 @@ class BeatTracker:
     
     def track(self, y: np.ndarray, sr: int, tempo: Optional[float] = None) -> Tuple[np.ndarray, float]:
         """Beat tracking: tight-window Gaussian DP trellis."""
-        onset_env = librosa.onset.onset_strength(
-            y=y, sr=sr, hop_length=self.cfg.audio.beat_hop_length
-        )
+        onset_env = self._beat_odf(y, sr, self.cfg.audio.beat_hop_length)
         fps = sr / self.cfg.audio.beat_hop_length
         N = len(onset_env)
 
@@ -121,6 +119,19 @@ class BeatTracker:
             ),
             float(tempo),
         )
+
+    def _beat_odf(self, y: np.ndarray, sr: int, hop_length: int) -> np.ndarray:
+        """Log-mel spectral flux: positive first differences of log-mel spectrogram."""
+        mel = librosa.feature.melspectrogram(
+            y=y, sr=sr, hop_length=hop_length, n_mels=80,
+            fmin=self.cfg.audio.onset_fmin, fmax=self.cfg.audio.onset_fmax,
+        )
+        log_mel = np.log1p(mel)
+        diff = np.diff(log_mel, axis=1, prepend=log_mel[:, :1])
+        flux = np.sum(np.maximum(diff, 0), axis=0)
+        if flux.max() > 0:
+            flux /= flux.max()
+        return flux
 
     def _estimate_tempo_from_env(self, onset_env: np.ndarray, fps: float) -> float:
         """Autocorrelation tempo estimation (L05 slide 23)."""
