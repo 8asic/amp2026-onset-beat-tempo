@@ -140,16 +140,18 @@ Scores are from standalone 127-file evaluation scripts (not notebook runs).
 | Metric | Validation (127 files) | Leaderboard |
 |--------|----------------------|-------------|
 | Onset F1 | **0.8051** (EXP-011) | *fill in* |
-| Beat F1 | **0.7139** (EXP-008) | *fill in* |
+| Beat F1 | **0.7215** (EXP-012) | *fill in* |
 | Tempo p-score | **0.7698** (EXP-008) | *fill in* |
-| Mean | **0.7629** (EXP-011) | *fill in* |
+| Mean | **0.7655** (EXP-012) | *fill in* |
 
 Progression: EXP-007 Mean=0.7325 → EXP-008 (comb_fusion tempo) 0.7568 →
-EXP-010 (multiband onset) 0.7593 → EXP-011 (whitening) 0.7629.
-EXP-011 config: onset multiband (n_bands=2, merge_tol_ms=15, threshold=0.026),
+EXP-010 (multiband onset) 0.7593 → EXP-011 (whitening) 0.7629 →
+EXP-012 (beat octave-select) 0.7655.
+EXP-012 config: onset multiband (n_bands=2, merge_tol_ms=15, threshold=0.026),
 superflux_gamma=200, superflux_mu=3, whiten=True (decay=0.995, floor=0.10),
 dp_transition_width=0.10, dp_transition_lambda=1.0, tempo_search_min=60,
-tempo_method=comb_fusion, tempo_comb_harmonics=2.
+tempo_method=comb_fusion, tempo_comb_harmonics=2,
+beat_octave_select=True (gate=78).
 
 ## Experiment Tracking
 

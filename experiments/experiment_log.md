@@ -608,4 +608,60 @@ EXP-007: **0.7325 → 0.7629 (+0.0304)**, all three metrics up.
 
 ---
 
+## EXP-012 — Evidence-Based Beat Octave Selection (slow tempos)
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-012 |
+| **Date** | 2026-06-12 |
+| **Status** | COMPLETED |
+
+### Motivation
+`--diag-beat` showed worst-beat files split three ways: (a) tempo correct but
+beats at the wrong octave (e.g. ff123_drone_short nPred=66≈nGT/2, tempoP=1.0),
+(b) tempo+count correct but phase-shifted, (c) genuine tempo errors. Group (a) is
+the half-beat pathology: when comb_fusion's primary < ~78 BPM, the annotated beat
+is usually 2× the strongest periodicity, but the tracker is fed the slower
+`_primary`.
+
+### Method
+`Pipeline._track_best_octave`: track beats at {base, 2·base} (∩ search range) and
+keep the grid maximizing an **octave-fair contrast** = mean onset ODF at beats −
+mean ODF at off-beat midpoints. A half-tempo grid's midpoints land on real onsets
+→ contrast collapses, so the correct (denser) octave wins. Gated by
+`beat_octave_gate=78`: only slow primaries are re-examined; plausible-beat tempos
+are left untouched.
+
+### Rejected variants (net-negative, removed)
+- **Global octave fold toward 120 BPM**: 0.7139 → 0.70 (damaged the many files
+  where `_primary` was already correct).
+- **Banded fold** (only fold outside [85,170]): best 0.7095 — genuinely slow-beat
+  ballads got wrongly doubled.
+- **Ungated contrast select** (all files): 0.7047 — contrast metric unreliable on
+  files it shouldn't touch.
+The gate is what makes it work: restricting to <78 BPM limits the blast radius to
+the half-beat cases.
+
+### Sweep (octave gate)
+| gate | Beat F1 | Mean |
+|------|---------|------|
+| 65 | 0.7163 | 0.7637 |
+| **72–88** | **0.7215** | **0.7655** |
+| 100+ | 0.7190 | 0.7646 |
+
+### Validation Results (127 files)
+| Metric | Score | vs EXP-011 |
+|--------|-------|------------|
+| Onset F1 | 0.8051 | 0 |
+| Beat F1 | **0.7215** | **+0.0076** |
+| Tempo | 0.7698 | 0 |
+| **Mean** | **0.7655** | **+0.0026** |
+
+### Decision
+KEEP. Cumulative EXP-008→012 over EXP-007: **0.7325 → 0.7655 (+0.0330)**.
+Octave/phase errors on plausible-tempo files and the 26 ambiguous-meter tempo
+files remain — both need richer evidence than a blanket rule provides.
+
+---
+
 <!-- Add new entries below this line -->

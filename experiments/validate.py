@@ -59,6 +59,7 @@ def main():
     ap.add_argument("--tempo-method", default=None, help="argmax | comb | comb_fusion")
     ap.add_argument("--harmonics", type=int, default=None, help="comb harmonics")
     ap.add_argument("--diag-tempo", action="store_true", help="list wrong-tempo files")
+    ap.add_argument("--diag-beat", action="store_true", help="list worst-beat files")
     ap.add_argument("--multiband", action="store_true", help="enable multiband onset")
     ap.add_argument("--n-bands", type=int, default=None, help="multiband band count")
     ap.add_argument("--merge-tol", type=float, default=None, help="merge tol ms")
@@ -66,6 +67,8 @@ def main():
     ap.add_argument("--whiten", action="store_true", help="enable adaptive whitening")
     ap.add_argument("--whiten-decay", type=float, default=None, help="whiten decay")
     ap.add_argument("--whiten-floor", type=float, default=None, help="whiten floor")
+    ap.add_argument("--no-octave-select", action="store_true", help="disable beat octave selection")
+    ap.add_argument("--octave-gate", type=float, default=None, help="octave-select gate bpm")
     args = ap.parse_args()
 
     if args.tempo_method is not None:
@@ -86,6 +89,10 @@ def main():
         config.audio.whiten_decay = args.whiten_decay
     if args.whiten_floor is not None:
         config.audio.whiten_floor = args.whiten_floor
+    if args.no_octave_select:
+        config.beat.beat_octave_select = False
+    if args.octave_gate is not None:
+        config.beat.beat_octave_gate = args.octave_gate
 
     loader = DataLoader()
     train_dir = ROOT / "data" / "processed" / "train"
@@ -95,6 +102,7 @@ def main():
 
     onset_f, beat_f, tempo_p = [], [], []
     tempo_wrong = []
+    beat_bad = []
 
     for stem, gt in train.items():
         y, sr = load_audio_cached(loader, stem, gt["wav"])
@@ -107,13 +115,20 @@ def main():
                 np.array(gt["onsets"]), np.array(onsets), window=0.05
             )
             onset_f.append(f)
+        bf = None
         if gt.get("beats") and len(beats):
-            beat_f.append(mir_eval.beat.f_measure(np.array(gt["beats"]), np.array(beats)))
+            bf = mir_eval.beat.f_measure(np.array(gt["beats"]), np.array(beats))
+            beat_f.append(bf)
+        pt = None
         if gt.get("tempo") and tempos:
-            p = tempo_pscore(gt["tempo"], tempos)
-            tempo_p.append(p)
-            if p < 0.5 and args.diag_tempo:
+            pt = tempo_pscore(gt["tempo"], tempos)
+            tempo_p.append(pt)
+            if pt < 0.5 and args.diag_tempo:
                 tempo_wrong.append((stem, gt["tempo"], [round(t, 1) for t in tempos]))
+        if args.diag_beat and bf is not None and bf < 0.5:
+            n_gt = len(gt["beats"]) if gt.get("beats") else 0
+            beat_bad.append((stem, round(bf, 3), n_gt, len(beats),
+                             round(pt, 2) if pt is not None else None))
 
     mo = np.mean(onset_f) if onset_f else 0.0
     mb = np.mean(beat_f) if beat_f else 0.0
@@ -130,6 +145,12 @@ def main():
         print(f"\nWrong-tempo files (p<0.5): {len(tempo_wrong)}")
         for stem, gt_t, est_t in tempo_wrong:
             print(f"  {stem}: GT={gt_t} EST={est_t}")
+
+    if args.diag_beat:
+        beat_bad.sort(key=lambda x: x[1])
+        print(f"\nWorst-beat files (F<0.5): {len(beat_bad)}  (stem, beatF, nGTbeats, nPred, tempoP)")
+        for stem, bf, n_gt, n_pred, pt in beat_bad:
+            print(f"  {stem}: beatF={bf} nGT={n_gt} nPred={n_pred} tempoP={pt}")
 
 
 if __name__ == "__main__":

@@ -49,6 +49,8 @@ class BeatConfig:
     dp_transition_width: float = 0.10  # tight window: ±fraction of beat period
     dp_transition_lambda: float = 1.0  # Gaussian penalty strength
     beat_two_pass: bool = False        # EXP-009: no-op on this data (comb_fusion lags already accurate)
+    beat_octave_select: bool = True    # EXP-012: pick beat octave by on/off-beat onset contrast (slow tempos only)
+    beat_octave_gate: float = 78.0     # only octave-select when base tempo below this
     eval_window_ms: float = 70.0
 
 

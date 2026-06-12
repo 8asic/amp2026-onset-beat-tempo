@@ -346,6 +346,51 @@ class Pipeline:
         onsets = self.onset_detector.detect(y, sr)
 
         # Track beats using estimated tempo
-        beats, _ = self.beat_tracker.track(y, sr, tempo=beat_tempo)
-        
+        if self.cfg.beat.beat_octave_select:
+            beats = self._track_best_octave(y, sr, beat_tempo)
+        else:
+            beats, _ = self.beat_tracker.track(y, sr, tempo=beat_tempo)
+
         return onsets, beats, tempos
+
+    def _track_best_octave(self, y: np.ndarray, sr: int, base_bpm: float) -> np.ndarray:
+        """Track beats at {base/2, base, base*2} and keep the grid whose beats sit
+        on onset peaks far above the off-beat midpoints. A half-tempo grid skips
+        real beats, so its midpoints land on onsets and contrast collapses; a
+        double-tempo grid puts beats on quiet off-beats. The contrast is octave-
+        fair, unlike raw onset sum/mean."""
+        hop = self.cfg.audio.beat_hop_length
+        odf = self.beat_tracker._beat_odf(y, sr, hop)
+        fps = sr / hop
+        lo, hi = self.cfg.beat.tempo_search_min, self.cfg.beat.tempo_max
+
+        # Only very slow primaries are prone to the half-beat pathology; leave
+        # plausible-beat tempos untouched (selecting an octave there regresses).
+        if base_bpm >= self.cfg.beat.beat_octave_gate:
+            beats, _ = self.beat_tracker.track(y, sr, tempo=base_bpm)
+            return beats
+
+        cands = []
+        for mult in (1.0, 2.0):
+            bpm = base_bpm * mult
+            if lo <= bpm <= hi:
+                cands.append(bpm)
+        if not cands:
+            cands = [float(np.clip(base_bpm, lo, hi))]
+
+        best_beats, best_score = None, -np.inf
+        for bpm in cands:
+            beats, _ = self.beat_tracker.track(y, sr, tempo=bpm)
+            frames = np.round(np.asarray(beats) * fps).astype(int)
+            frames = frames[(frames >= 0) & (frames < len(odf))]
+            if len(frames) < 2:
+                continue
+            on = float(odf[frames].mean())
+            mids = (frames[:-1] + frames[1:]) // 2
+            off = float(odf[mids].mean()) if len(mids) else 0.0
+            score = on - off
+            if score > best_score:
+                best_beats, best_score = beats, score
+        if best_beats is None:
+            best_beats, _ = self.beat_tracker.track(y, sr, tempo=base_bpm)
+        return best_beats
