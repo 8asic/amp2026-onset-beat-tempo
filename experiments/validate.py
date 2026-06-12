@@ -60,6 +60,7 @@ def main():
     ap.add_argument("--harmonics", type=int, default=None, help="comb harmonics")
     ap.add_argument("--diag-tempo", action="store_true", help="list wrong-tempo files")
     ap.add_argument("--diag-beat", action="store_true", help="list worst-beat files")
+    ap.add_argument("--diag-phase", action="store_true", help="phase analysis of tempo-correct beat failures")
     ap.add_argument("--multiband", action="store_true", help="enable multiband onset")
     ap.add_argument("--n-bands", type=int, default=None, help="multiband band count")
     ap.add_argument("--merge-tol", type=float, default=None, help="merge tol ms")
@@ -103,6 +104,7 @@ def main():
     onset_f, beat_f, tempo_p = [], [], []
     tempo_wrong = []
     beat_bad = []
+    beat_phase = []
 
     for stem, gt in train.items():
         y, sr = load_audio_cached(loader, stem, gt["wav"])
@@ -129,6 +131,23 @@ def main():
             n_gt = len(gt["beats"]) if gt.get("beats") else 0
             beat_bad.append((stem, round(bf, 3), n_gt, len(beats),
                              round(pt, 2) if pt is not None else None))
+        if (args.diag_phase and bf is not None and bf < 0.5
+                and pt is not None and pt >= 0.5
+                and gt.get("beats") and len(gt["beats"]) >= 3 and len(beats) >= 3):
+            gtb = np.asarray(gt["beats"], dtype=float)
+            pb = np.asarray(beats, dtype=float)
+            period = float(np.median(np.diff(gtb)))
+            # signed offset of each pred beat to nearest GT beat
+            idx = np.searchsorted(gtb, pb)
+            idx = np.clip(idx, 1, len(gtb) - 1)
+            left = gtb[idx - 1]
+            right = gtb[idx]
+            nearest = np.where(np.abs(pb - left) <= np.abs(pb - right), left, right)
+            off = pb - nearest
+            phase_frac = float(np.median(np.abs(off)) / period) if period > 0 else 0.0
+            beat_phase.append((stem, round(bf, 3), round(period, 3),
+                               round(float(np.median(off)), 3),
+                               round(phase_frac, 3)))
 
     mo = np.mean(onset_f) if onset_f else 0.0
     mb = np.mean(beat_f) if beat_f else 0.0
@@ -151,6 +170,14 @@ def main():
         print(f"\nWorst-beat files (F<0.5): {len(beat_bad)}  (stem, beatF, nGTbeats, nPred, tempoP)")
         for stem, bf, n_gt, n_pred, pt in beat_bad:
             print(f"  {stem}: beatF={bf} nGT={n_gt} nPred={n_pred} tempoP={pt}")
+
+    if args.diag_phase:
+        beat_phase.sort(key=lambda x: x[1])
+        print(f"\nTempo-correct but beat-bad (F<0.5, tempoP>=0.5): {len(beat_phase)}")
+        print("  (stem, beatF, period_s, medSignedOff_s, |off|/period)")
+        print("  phase_frac near 0.5 = anti-phase (off-beat); near 0 = aligned-but-jittery")
+        for stem, bf, period, medoff, frac in beat_phase:
+            print(f"  {stem}: beatF={bf} period={period} medOff={medoff} frac={frac}")
 
 
 if __name__ == "__main__":

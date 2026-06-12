@@ -664,4 +664,39 @@ files remain — both need richer evidence than a blanket rule provides.
 
 ---
 
+## EXP-013 — Evidence-Gated Beat Phase Refinement (REJECTED — no-op)
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-013 |
+| **Date** | 2026-06-12 |
+| **Status** | REJECTED — no-op, code removed |
+
+### Motivation
+`--diag-phase` (new harness diagnostic) isolated 8 files that are tempo-correct
+(p≥0.5) but beat-poor (F<0.5). Two are clean anti-phase (ff123_drone_short
+|off|/period=0.465, SoundCheck2_82_Yello 0.488 — beats land on the off-beat);
+the other six are moderate jitter (frac 0.18–0.29, several with median signed
+offset ≈ 0, i.e. scattered not shifted).
+
+### Method
+After tracking, try shifting the whole beat grid by ±½ period and keep the phase
+with higher on/off-beat onset contrast, accepting a flip only if it beats the
+current phase by `beat_phase_margin`.
+
+### Result
+Beat F1 unchanged at 0.7215 for every margin in {0, 0.02, 0.05, 0.10}. The flip
+**never triggers**: the DP already maximizes onset energy along its path, so the
+alternate phase never has higher contrast. The two genuine anti-phase files
+(drone, Yello) have almost no onset evidence — which is exactly why the DP chose
+the wrong phase and why no onset-based criterion can recover it.
+
+### Decision
+REJECTED. Code removed; `--diag-phase` diagnostic kept. Conclusion: the residual
+phase failures are onset-evidence-starved (drones/synths) and not fixable from the
+onset ODF. Would need a different signal (bass/harmonic tracking or a learned
+model) — out of scope and overfit-prone for ~2 files.
+
+---
+
 <!-- Add new entries below this line -->
