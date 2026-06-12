@@ -2,7 +2,7 @@
 
 import numpy as np
 import librosa
-from scipy.ndimage import gaussian_filter1d, maximum_filter1d
+from scipy.ndimage import gaussian_filter1d, maximum_filter1d, median_filter
 
 from .config import config
 
@@ -45,16 +45,37 @@ class FeatureExtractor:
         Shared core for `superflux()` and `superflux_bands()`. Optional adaptive
         spectral whitening (config.audio.whiten) divides each mel bin by a causal
         running peak before log compression, lifting soft onsets in quiet bands.
+        When config.audio.hpss is True, percussive soft-masking is applied in the
+        STFT domain (1025 bins) before projecting to mel for better separation of
+        narrow harmonics vs broadband transients.
         """
-        mel = librosa.feature.melspectrogram(
-            y=y,
-            sr=self.sr,
-            n_fft=self.cfg.audio.onset_fft_size,
-            hop_length=self.cfg.audio.onset_hop_length,
-            n_mels=self.cfg.audio.onset_n_mels,
-            fmin=self.cfg.audio.onset_fmin,
-            fmax=self.cfg.audio.onset_fmax,
-        )
+        if self.cfg.audio.hpss:
+            # STFT-domain HPSS: higher freq resolution than mel domain
+            D = np.abs(librosa.stft(
+                y, n_fft=self.cfg.audio.onset_fft_size,
+                hop_length=self.cfg.audio.onset_hop_length,
+            )) ** 2  # power spectrogram (n_fft//2+1, n_frames)
+            kh = self.cfg.audio.hpss_kernel_harm
+            kp = self.cfg.audio.hpss_kernel_perc
+            harm = median_filter(D, size=(1, kh), mode='reflect')
+            perc = median_filter(D, size=(kp, 1), mode='reflect')
+            mask = perc / (perc + harm + 1e-8)
+            mel_fb = librosa.filters.mel(
+                sr=self.sr, n_fft=self.cfg.audio.onset_fft_size,
+                n_mels=self.cfg.audio.onset_n_mels,
+                fmin=self.cfg.audio.onset_fmin, fmax=self.cfg.audio.onset_fmax,
+            )
+            mel = np.dot(mel_fb, D * mask)
+        else:
+            mel = librosa.feature.melspectrogram(
+                y=y,
+                sr=self.sr,
+                n_fft=self.cfg.audio.onset_fft_size,
+                hop_length=self.cfg.audio.onset_hop_length,
+                n_mels=self.cfg.audio.onset_n_mels,
+                fmin=self.cfg.audio.onset_fmin,
+                fmax=self.cfg.audio.onset_fmax,
+            )
         if self.cfg.audio.whiten:
             mel = self._whiten(mel)
         log_mel = np.log1p(self.cfg.audio.superflux_gamma * mel)  # (n_mels, n_frames)

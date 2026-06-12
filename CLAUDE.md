@@ -136,13 +136,17 @@ Tempo GT format: `[t_lo, t_hi, w]` where `w` is the annotator weight for
 ## Current Best Validated Scores
 
 Scores are from standalone 127-file evaluation scripts (not notebook runs).
+**Onset screening rule (EXP-014):** any onset config change must also be evaluated
+on the `--extra-onsets` 150-file set to screen for train-set overfit. The combined
+277-file onset score (0.7493 at baseline) is the true generalization benchmark.
+Leaderboard onset (0.75) matches the combined-set score, not the train-only 0.8051.
 
-| Metric | Validation (127 files) | Leaderboard |
-|--------|----------------------|-------------|
-| Onset F1 | **0.8051** (EXP-011) | *fill in* |
-| Beat F1 | **0.7215** (EXP-012) | *fill in* |
-| Tempo p-score | **0.7698** (EXP-008) | *fill in* |
-| Mean | **0.7655** (EXP-012) | *fill in* |
+| Metric | Validation (127 files) | Leaderboard (EXP-012) |
+|--------|----------------------|----------------------|
+| Onset F1 | **0.8051** (EXP-011) | 0.75 |
+| Beat F1 | **0.7215** (EXP-012) | 0.725 |
+| Tempo p-score | **0.7698** (EXP-008) | **0.86** |
+| Mean | **0.7655** (EXP-012) | **0.7783** |
 
 Progression: EXP-007 Mean=0.7325 → EXP-008 (comb_fusion tempo) 0.7568 →
 EXP-010 (multiband onset) 0.7593 → EXP-011 (whitening) 0.7629 →

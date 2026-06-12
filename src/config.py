@@ -22,6 +22,9 @@ class AudioConfig:
     whiten: bool = True            # EXP-011: adaptive spectral whitening
     whiten_decay: float = 0.995    # causal running-peak decay per frame
     whiten_floor: float = 0.10     # per-bin floor as fraction of bin max
+    hpss: bool = False             # EXP-014: REJECTED — hurts generalization (see log)
+    hpss_kernel_harm: int = 127    # median filter length along time axis (harmonic)
+    hpss_kernel_perc: int = 17     # median filter length along freq axis (percussive)
 
 
 @dataclass

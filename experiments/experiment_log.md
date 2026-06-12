@@ -614,7 +614,8 @@ EXP-007: **0.7325 → 0.7629 (+0.0304)**, all three metrics up.
 |-------|-------|
 | **Experiment ID** | EXP-012 |
 | **Date** | 2026-06-12 |
-| **Status** | COMPLETED |
+| **Status** | COMPLETED — submitted, leaderboard recorded |
+| **Submission file** | `submissions/EXP-012_20260612_180044_aa97e56/predictions.json` |
 
 ### Motivation
 `--diag-beat` showed worst-beat files split three ways: (a) tempo correct but
@@ -657,8 +658,24 @@ the half-beat cases.
 | Tempo | 0.7698 | 0 |
 | **Mean** | **0.7655** | **+0.0026** |
 
+### Leaderboard Results (submitted 2026-06-12)
+| Metric | Validation | Leaderboard | Delta |
+|--------|------------|-------------|-------|
+| Onset F1 | 0.8051 | **0.75** | −0.055 |
+| Beat F1 | 0.7215 | **0.725** | +0.004 |
+| Tempo p-score | 0.7698 | **0.86** | +0.090 |
+| **Mean** | **0.7655** | **0.7783** | **+0.013** |
+
+Leaderboard mean exceeds validation mean — **no overfitting overall**. Onset is
+the only gap (−0.055): threshold 0.026 likely tuned slightly hot on train. Tempo
+generalizes very strongly (+0.09, comb_fusion is robust on unseen styles). Beat
+is essentially the same (+0.004).
+
 ### Decision
-KEEP. Cumulative EXP-008→012 over EXP-007: **0.7325 → 0.7655 (+0.0330)**.
+KEEP. Cumulative EXP-008→012 over EXP-007: **0.7325 → 0.7655 (+0.0330)** val,
+**leaderboard 0.7783**.
+Onset is the active bottleneck on leaderboard (0.75). Next: HPSS percussive
+masking to improve onset recall on leaderboard without threshold overfitting.
 Octave/phase errors on plausible-tempo files and the 26 ambiguous-meter tempo
 files remain — both need richer evidence than a blanket rule provides.
 
@@ -696,6 +713,73 @@ REJECTED. Code removed; `--diag-phase` diagnostic kept. Conclusion: the residual
 phase failures are onset-evidence-starved (drones/synths) and not fixable from the
 onset ODF. Would need a different signal (bass/harmonic tracking or a learned
 model) — out of scope and overfit-prone for ~2 files.
+
+---
+
+## EXP-014 — HPSS Percussive Masking (REJECTED — train overfit)
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-014 |
+| **Date** | 2026-06-12 |
+| **Status** | REJECTED — generalizes worse on extra onset data |
+
+### Motivation
+EXP-012 leaderboard revealed onset gap: val 0.8051 vs leaderboard 0.75 (−0.055).
+Hypothesis: SuperFlux captures harmonic onset energy that the test set may have
+less of; HPSS percussive masking before superflux would bias toward transients.
+
+### Method
+STFT-domain HPSS (Fitzgerald 2010): compute power STFT, apply median filter along
+time axis (harmonic, kernel=kh frames) and frequency axis (percussive, kernel=kp
+bins), form soft mask `perc/(perc+harm+eps)`, apply to power STFT before projecting
+to mel. This gives higher frequency resolution than mel-domain HPSS (1025 bins vs 82).
+
+### Key secondary finding: val→lb onset gap is distribution mismatch
+Used the 150 `train_extra_onsets` files as a proxy for test-set diversity. Finding:
+- Baseline threshold=0.026 on 127 train files: **onset F1 0.8051**
+- Baseline threshold=0.026 on 150 extra onset files: **onset F1 0.7021**
+- Combined 277 files at threshold=0.026: **onset F1 0.7493** ≈ leaderboard 0.75
+
+This confirms the val→lb onset gap is almost entirely explained by distribution
+mismatch, not an algorithmic bug. The 150 extra files are harder/more diverse
+and match the leaderboard distribution.
+
+### HPSS sweep results (kh × kp on 127 train files)
+| kh | kp | Onset F1 | Mean |
+|----|-----|---------|------|
+| 17 | 17 | 0.8007 | 0.7640 |
+| 31 | 17 | 0.8027 | 0.7646 |
+| 51 | 51 | 0.8083 | 0.7665 |
+| 71 | 51 | 0.8084 | 0.7665 |
+| 91 | 17 | 0.8079 | 0.7664 |
+| **127** | **17** | **0.8092** | **0.7668** |
+| 171 | 17 | 0.8085 | 0.7666 |
+
+Best on train: **kh=127, kp=17** → Onset 0.8092, Mean 0.7668 (+0.0013 mean).
+
+### Generalization failure
+| Config | Train 127 | Extra 150 | Combined 277 |
+|--------|-----------|-----------|--------------|
+| Baseline 0.026 | 0.8051 | 0.7021 | 0.7493 |
+| HPSS kh=127 kp=17 | **0.8092** | **0.675** | **0.7366** |
+
+HPSS *hurts* on extra files by −0.027. Classic overfit: extracts features specific
+to the 127 training file style distribution.
+
+### Other things tested (all rejected)
+- **n_bands sweep on 277 files**: n_bands=3 → 0.7146, n_bands=4 → 0.6764 (both worse than 2→0.7493)
+- **threshold=0.028**: train plateau (0.8050), extra +0.005, combined +0.0025 — too small to submit
+- **threshold=0.030**: train −0.0002, extra +0.0087 — marginal
+
+### Decision
+REJECTED. HPSS code left in `features.py` but `config.audio.hpss=False` (default off).
+The val→lb onset gap is a distribution mismatch — not fixable by feature engineering
+without test set access. The 150-file extra-onset set is now in the harness via
+`--extra-onsets` for future threshold calibration.
+
+**Key rule going forward**: any onset feature must be validated on the 277-file
+combined set (127 train + 150 extra) to screen for train-set overfit before submitting.
 
 ---
 

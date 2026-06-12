@@ -70,6 +70,10 @@ def main():
     ap.add_argument("--whiten-floor", type=float, default=None, help="whiten floor")
     ap.add_argument("--no-octave-select", action="store_true", help="disable beat octave selection")
     ap.add_argument("--octave-gate", type=float, default=None, help="octave-select gate bpm")
+    ap.add_argument("--hpss", action="store_true", help="enable HPSS percussive masking before superflux")
+    ap.add_argument("--hpss-kern-harm", type=int, default=None, help="HPSS harmonic median kernel (time frames)")
+    ap.add_argument("--hpss-kern-perc", type=int, default=None, help="HPSS percussive median kernel (mel bins)")
+    ap.add_argument("--extra-onsets", action="store_true", help="also evaluate on train_extra_onsets (150 files, onset-only)")
     args = ap.parse_args()
 
     if args.tempo_method is not None:
@@ -94,10 +98,21 @@ def main():
         config.beat.beat_octave_select = False
     if args.octave_gate is not None:
         config.beat.beat_octave_gate = args.octave_gate
+    if args.hpss:
+        config.audio.hpss = True
+    if args.hpss_kern_harm is not None:
+        config.audio.hpss_kernel_harm = args.hpss_kern_harm
+    if args.hpss_kern_perc is not None:
+        config.audio.hpss_kernel_perc = args.hpss_kern_perc
 
     loader = DataLoader()
     train_dir = ROOT / "data" / "processed" / "train"
     train = loader.load_train(train_dir)
+
+    if args.extra_onsets:
+        extra_dir = ROOT / "data" / "processed" / "train_extra_onsets"
+        extra = loader.load_extra_onsets(extra_dir)
+        train = {**train, **extra}
 
     pipe = Pipeline()
 
