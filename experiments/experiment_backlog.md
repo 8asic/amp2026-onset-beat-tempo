@@ -10,12 +10,17 @@
 
 | Rank | ID | Title | Expected Gain | Confidence | Effort | Risk |
 |------|----|-------|---------------|------------|--------|------|
-| 1 | EXP-004 | γ and μ sweep on 127 files | +0.01–0.03 onset F1 | High | Easy | None |
-| 2 | EXP-005 | 99th-percentile ODF normalisation | +0.01–0.03 onset F1 | Medium | Easy | Low |
-| 3 | EXP-006 | HPSS soft-mask + Real SuperFlux at hop=256 | +0.01–0.02 onset F1 | Medium | Moderate | Low |
-| 4 | EXP-007 | Multi-hypothesis beat (fixed winner: total DP score / N_beats) | +0.02–0.05 beat F1 | Medium | Moderate | Medium |
-| 5 | EXP-008 | Windowed tempo re-estimation for beat tracking | +0.02–0.06 beat F1 | Medium | Moderate | Medium |
-| 6 | EXP-009 | Use Real SuperFlux envelope for beat tracking | +0.01–0.04 beat F1 | Low | Easy | Low |
+| 1 | EXP-012 | Residual tempo: beat-level multi-hypothesis / comb sub-harmonic pair for the 26 ambiguous-meter files | +0.01–0.03 tempo & beat | Medium | Moderate | Medium |
+| 2 | EXP-013 | HPSS percussive soft-mask before superflux (onset recall) | +0.005–0.02 onset F1 | Medium | Moderate | Low |
+| 3 | EXP-014 | Sub-frame parabolic interpolation of onset/beat peaks | +0.00–0.01 (polish) | Low | Easy | Low |
+
+**Done (now in experiment_log.md):** EXP-004 (γ/μ sweep), EXP-005 (tight DP),
+EXP-006 (log-mel beat ODF), EXP-007 (tempo search floor), EXP-008 (comb_fusion
+tempo — DONE, replaced the old "windowed tempo" idea), EXP-009 (two-pass beat —
+REJECTED no-op), EXP-010 (multiband onset), EXP-011 (adaptive whitening).
+The old EXP-005 (percentile ODF norm) and EXP-009 (SuperFlux beat envelope) ideas
+are superseded — beat now uses log-mel flux (EXP-006) and onset uses
+multiband+whitening (EXP-010/011).
 
 ---
 

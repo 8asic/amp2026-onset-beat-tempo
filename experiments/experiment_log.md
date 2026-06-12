@@ -453,4 +453,159 @@ KEEP. +0.105 mean score improvement — largest single-experiment gain.
 
 ---
 
+## EXP-008 — Comb-Filter + AC×DFT Tempogram Fusion
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-008 |
+| **Date** | 2026-06-12 |
+| **Status** | COMPLETED |
+| **Git commit (before)** | *EXP-007 head* |
+| **Git commit (after)** | *fill in* |
+
+### Motivation
+EXP-007 tempo (0.7269) and beat (0.6838) shared one root cause: metrical-level
+errors (×2, ×1.5, ×3). The estimator took a single argmax of the normalized
+autocorrelation, so the true beat period and its octave/triple impostors all
+compete as bare AC peaks and the tallest (often wrong) wins.
+
+### Method
+`TempoEstimator` salience refactor (config.beat.tempo_method):
+- **comb**: for each candidate period τ, sum normalized AC at integer multiples
+  {τ, 2τ, …, Hτ}. The true period accumulates the most harmonic support, so
+  impostors lacking a strong fundamental lose.
+- **comb_fusion** (chosen): multiply the comb-AC salience by a Fourier tempogram
+  (direct DFT magnitude at 1/τ cycles/frame). AC over-favors long lags, the DFT
+  over-favors short ones; their product cancels both octave biases.
+- `tempo_comb_harmonics` swept {2,3,4,5,6}; **H=2** best (fundamental + octave).
+  More harmonics over-reward long periods.
+
+The salience argmax sets `_primary`, which feeds the beat tracker — so a better
+tempo level also sharpens beat placement.
+
+### Validation Results (127 files, standalone)
+| Method | Onset | Beat | Tempo | Mean |
+|--------|-------|------|-------|------|
+| argmax (EXP-007) | 0.7866 | 0.6838 | 0.7269 | 0.7325 |
+| comb (H=4) | 0.7866 | 0.6994 | 0.7387 | 0.7416 |
+| comb_fusion (H=4) | 0.7866 | 0.7063 | 0.7461 | 0.7463 |
+| **comb_fusion (H=2)** | 0.7866 | **0.7139** | **0.7698** | **0.7568** |
+
+### Decision
+KEEP. comb_fusion, H=2. +0.0301 beat, +0.0429 tempo, **+0.0243 mean**. Largest
+tempo gain since EXP-007. 26 residual wrong-tempo files remain (slow jazz
+over-estimated; fast Media files locked to the 2/3 level) — genuine metrical
+ambiguity, diminishing returns.
+
+---
+
+## EXP-009 — Two-Pass Beat Tracking (REJECTED — no-op)
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-009 |
+| **Date** | 2026-06-12 |
+| **Status** | REJECTED — no measurable effect |
+
+### Method
+After the first DP pass, recompute the lag from the realized median inter-beat
+interval and re-run the DP if it differs (octave-guarded). Refactored the DP body
+into reusable `BeatTracker._dp_beats()`.
+
+### Result
+Beat F1 unchanged at 0.7139 to 4 d.p. With comb_fusion supplying an accurate
+`_primary` and the tight ±10% window keeping beats on-period, the median IBI
+rounds back to the same lag for every file, so the second pass never fires.
+
+### Decision
+REJECTED. `config.beat.beat_two_pass` left in place but defaulted **False**. The
+`_dp_beats()` refactor is kept (clean, reusable for future multi-hypothesis work).
+
+---
+
+## EXP-010 — Multiband Onset Peak-Picking
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-010 |
+| **Date** | 2026-06-12 |
+| **Status** | COMPLETED |
+
+### Motivation
+Onset bottleneck was recall (0.72) at precision 0.89: soft/tonal onsets salient
+in one frequency region get drowned by the all-band superflux sum + single
+global threshold.
+
+### Method
+`FeatureExtractor.superflux_bands()`: split the mel bins into `n_bands` contiguous
+groups, emit one normalized ODF per band. `OnsetDetector` runs the existing LFSF
+adaptive picker (`_pick`) per band and merges cross-band peaks within
+`merge_tol_ms` (`_merge_frames`). Per-band picking needs a higher delta (each band
+is noisier) — re-swept threshold.
+
+### Sweep (Onset F1)
+- n_bands {2,3,4,5} at th=0.011 → all WORSE (false positives); best nb=2 = 0.7768.
+- Raising delta recovers precision: nb=2 th=0.022 = 0.7915; merge_tol=15 = **0.7942**.
+- nb=3/4 never beat nb=2.
+
+Chosen: **multiband=True, n_bands=2, threshold=0.022, merge_tol_ms=15**.
+
+### Validation Results (127 files)
+| Metric | Score | vs EXP-008 |
+|--------|-------|------------|
+| Onset F1 | **0.7942** | **+0.0076** |
+| Beat F1 | 0.7139 | 0 |
+| Tempo | 0.7698 | 0 |
+| **Mean** | **0.7593** | **+0.0025** |
+
+### Decision
+KEEP.
+
+---
+
+## EXP-011 — Adaptive Spectral Whitening
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-011 |
+| **Date** | 2026-06-12 |
+| **Status** | COMPLETED |
+
+### Motivation
+Continue attacking onset recall: lift soft onsets in quiet mel bins before flux.
+
+### Method
+`FeatureExtractor._whiten()`: divide each mel bin by a causal decaying running
+peak `psp[t] = max(mel[t], decay*psp[t-1], floor)`, floored at `whiten_floor` ×
+the bin's global max so silent bins are not amplified into noise. Applied in the
+shared `_superflux_posdiff()` core (used by both single-band and multiband paths)
+before log compression. Swept decay × floor, then re-tuned threshold.
+
+### Sweep (Onset F1, multiband nb=2)
+- decay 0.9–0.999 × floor 0.001–0.15: monotone improvement toward slow decay +
+  moderate floor. Plateau ~0.803 at decay∈{0.995,0.999}, floor∈{0.10,0.15}.
+- Re-tuned threshold at decay=0.995, floor=0.10: peak **0.8051 at threshold=0.026**.
+
+Chosen: **whiten=True, decay=0.995, floor=0.10, threshold=0.026**.
+
+### Validation Results (127 files)
+| Metric | Score | vs EXP-010 | vs EXP-007 baseline |
+|--------|-------|------------|---------------------|
+| Onset F1 | **0.8051** | **+0.0109** | **+0.0185** |
+| Beat F1 | **0.7139** | 0 | +0.0301 |
+| Tempo | **0.7698** | 0 | +0.0429 |
+| **Mean** | **0.7629** | **+0.0036** | **+0.0304** |
+
+### Decision
+KEEP. First time onset F1 breaks 0.80. Cumulative EXP-008+010+011 lift over
+EXP-007: **0.7325 → 0.7629 (+0.0304)**, all three metrics up.
+
+### Next Actions
+- Upload EXP-011 submission to challenge server, record leaderboard.
+- Residual tempo: 26 ambiguous-meter files (compound/triple). Multi-hypothesis
+  at the beat level, or pair selection from comb sub/super-harmonics, may help.
+- Beat: remaining errors are octave/phase on a handful of files.
+
+---
+
 <!-- Add new entries below this line -->

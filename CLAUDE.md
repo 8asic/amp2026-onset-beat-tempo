@@ -139,13 +139,17 @@ Scores are from standalone 127-file evaluation scripts (not notebook runs).
 
 | Metric | Validation (127 files) | Leaderboard |
 |--------|----------------------|-------------|
-| Onset F1 | **0.7866** (EXP-006/007) | *fill in* |
-| Beat F1 | **0.6838** (EXP-007) | *fill in* |
-| Tempo p-score | **0.7269** (EXP-007) | *fill in* |
-| Mean | **0.7325** (EXP-007) | *fill in* |
+| Onset F1 | **0.8051** (EXP-011) | *fill in* |
+| Beat F1 | **0.7139** (EXP-008) | *fill in* |
+| Tempo p-score | **0.7698** (EXP-008) | *fill in* |
+| Mean | **0.7629** (EXP-011) | *fill in* |
 
-Baseline (EXP-006): Onset=0.7866, Beat=0.5359, Tempo=0.5958, Mean=0.6394
-EXP-007 config: threshold=0.011, method=superflux, onset_hop_length=256, superflux_gamma=200, superflux_mu=3, dp_transition_width=0.10, dp_transition_lambda=1.0, tempo_search_min=60.0
+Progression: EXP-007 Mean=0.7325 → EXP-008 (comb_fusion tempo) 0.7568 →
+EXP-010 (multiband onset) 0.7593 → EXP-011 (whitening) 0.7629.
+EXP-011 config: onset multiband (n_bands=2, merge_tol_ms=15, threshold=0.026),
+superflux_gamma=200, superflux_mu=3, whiten=True (decay=0.995, floor=0.10),
+dp_transition_width=0.10, dp_transition_lambda=1.0, tempo_search_min=60,
+tempo_method=comb_fusion, tempo_comb_harmonics=2.
 
 ## Experiment Tracking
 

@@ -19,16 +19,22 @@ class AudioConfig:
     onset_n_mels: int = 82
     superflux_gamma: float = 200.0
     superflux_mu: int = 3
+    whiten: bool = True            # EXP-011: adaptive spectral whitening
+    whiten_decay: float = 0.995    # causal running-peak decay per frame
+    whiten_floor: float = 0.10     # per-bin floor as fraction of bin max
 
 
 @dataclass
 class OnsetConfig:
     """Onset detection parameters."""
-    threshold: float = 0.011  # F1-optimal on 127 files (peak at 0.011; lower delta raises recall but hurts precision)
+    threshold: float = 0.026  # EXP-011 multiband+whiten optimum (was 0.022 pre-whiten, 0.011 single-band)
     peak_distance: int = 2   # SMALLER = more peaks (was 3)
     smoothing_sigma: float = 1.0
     method: str = "superflux"  # or "flux"
     eval_window_ms: float = 50.0
+    multiband: bool = True    # EXP-010: per-band superflux peak picking (recall)
+    n_bands: int = 2          # mel-band groups for multiband picking
+    merge_tol_ms: float = 15.0  # merge cross-band peaks within this tolerance
 
 
 @dataclass
@@ -37,9 +43,12 @@ class BeatConfig:
     tempo_min: float = 30.0
     tempo_max: float = 200.0
     tempo_search_min: float = 60.0    # AC search floor; avoids measure-level false peaks
+    tempo_method: str = "comb_fusion"  # "argmax" | "comb" | "comb_fusion" (EXP-008)
+    tempo_comb_harmonics: int = 2     # # integer harmonics summed in comb salience
     dp_alpha: float = 100.0          # Ellis DP tightness (kept for reference)
     dp_transition_width: float = 0.10  # tight window: ±fraction of beat period
     dp_transition_lambda: float = 1.0  # Gaussian penalty strength
+    beat_two_pass: bool = False        # EXP-009: no-op on this data (comb_fusion lags already accurate)
     eval_window_ms: float = 70.0
 
 

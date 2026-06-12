@@ -21,7 +21,10 @@ build/
 *.ipynb~
 
 # Submissions
-submissions/*.json
+submissions/
+
+# Experiment harness cache (decoded audio)
+experiments/.cache/
 
 # IDE
 .vscode/
