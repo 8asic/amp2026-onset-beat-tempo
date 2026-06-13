@@ -30,14 +30,16 @@ class AudioConfig:
 @dataclass
 class OnsetConfig:
     """Onset detection parameters."""
-    threshold: float = 0.026  # EXP-011 multiband+whiten optimum (was 0.022 pre-whiten, 0.011 single-band)
+    threshold: float = 0.055  # EXP-015 fusion (superflux+complex) optimum on 277-file set
     peak_distance: int = 2   # SMALLER = more peaks (was 3)
     smoothing_sigma: float = 1.0
     method: str = "superflux"  # or "flux"
     eval_window_ms: float = 50.0
-    multiband: bool = True    # EXP-010: per-band superflux peak picking (recall)
+    multiband: bool = True    # EXP-010: per-band superflux peak picking (fallback when fusion off)
     n_bands: int = 2          # mel-band groups for multiband picking
     merge_tol_ms: float = 15.0  # merge cross-band peaks within this tolerance
+    fusion: bool = True       # EXP-015: multi-ODF channel peak-picking + merge
+    fusion_odfs: tuple = ("superflux", "complex")  # channels to fuse (hfc/phase rejected)
 
 
 @dataclass

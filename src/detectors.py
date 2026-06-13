@@ -25,9 +25,15 @@ class OnsetDetector:
         fps = sr / self.cfg.audio.onset_hop_length
         delta = self.cfg.onset.threshold
 
-        if self.cfg.onset.multiband:
-            bands = self.fe.superflux_bands(y, self.cfg.onset.n_bands)
+        if self.cfg.onset.fusion:
+            chans = self.fe.onset_channels(y)
             frames: list[int] = []
+            for k in range(chans.shape[0]):
+                frames.extend(self._pick(chans[k], fps, delta))
+            peaks = self._merge_frames(frames, fps)
+        elif self.cfg.onset.multiband:
+            bands = self.fe.superflux_bands(y, self.cfg.onset.n_bands)
+            frames = []
             for k in range(bands.shape[0]):
                 frames.extend(self._pick(bands[k], fps, delta))
             peaks = self._merge_frames(frames, fps)

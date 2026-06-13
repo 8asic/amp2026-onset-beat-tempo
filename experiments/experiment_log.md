@@ -783,4 +783,96 @@ combined set (127 train + 150 extra) to screen for train-set overfit before subm
 
 ---
 
+## EXP-015 — Multi-ODF Fusion (SuperFlux + Complex-Domain) — KEEP
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-015 |
+| **Date** | 2026-06-12 |
+| **Status** | COMPLETED — KEEP (first onset gain that generalizes to the 277-file set) |
+| **Git commit (before)** | 2068bc6 |
+
+### Motivation
+EXP-014 established that the val→leaderboard onset gap is distribution mismatch:
+the 277-file combined set (0.7493) matches the leaderboard (0.75), while the
+127-train score (0.8051) is an over-optimistic outlier. A fixed-threshold
+SuperFlux ODF cannot be pushed further on train without overfitting. To gain on
+the *generalization* benchmark we need a richer ODF that catches onset types
+SuperFlux misses — specifically soft/tonal attacks where magnitude flux is weak
+but phase/complex structure changes.
+
+### Method
+Added three new onset detection functions (pure numpy/scipy, allowed libs):
+- **complex_domain** (rectified, Bello/Duxbury): predict each STFT bin from the
+  previous frame (constant magnitude, constant phase rate), measure complex
+  deviation, rectify to energy rises. Catches tonal onsets.
+- **hfc** (Masri): high-frequency-content flux.
+- **phase_deviation** (magnitude-weighted, Bello).
+
+Fusion path: each ODF is a *channel*; the existing LFSF peak picker runs per
+channel and peaks are merged across channels within merge_tol_ms — identical
+architecture to multiband (EXP-010), just with cross-family channels. The
+musical decision (peak picking) stays our own hand-written code; the model only
+upgrades the activation. `config.onset.fusion`, `config.onset.fusion_odfs`.
+
+### Standalone ODF quality (277-file set, own threshold)
+| ODF | best Onset F1 | verdict |
+|-----|---------------|---------|
+| superflux (multiband, baseline) | 0.7493 | reference |
+| complex-domain | 0.7476 | competitive — KEEP |
+| phase-deviation | 0.7094 | weak in union — drop |
+| hfc | 0.6101 | weak — drop |
+
+Complex-domain alone nearly matches the full multiband SuperFlux, and catches
+*different* onsets, so the union exceeds both.
+
+### Fusion sweep (superflux + complex, 277-file set)
+| threshold | Onset F1 (277) |
+|-----------|----------------|
+| 0.040 | 0.7532 |
+| 0.050 | 0.7601 |
+| **0.055** | **0.7615** |
+| 0.058 | 0.7615 |
+| 0.060 | 0.7612 |
+| 0.070 | 0.7594 |
+
+Broad plateau at 0.055–0.058 (not an overfit spike). Adding phase to the union
+regressed it to ~0.71 — rejected. The complex channel adds peaks, so the union
+needs a higher delta (0.055 vs 0.026 single-family) to trim false positives.
+
+### Train/extra split at threshold=0.055
+| set | baseline (multiband 0.026) | EXP-015 fusion | delta |
+|-----|---------------------------|----------------|-------|
+| 127 train | 0.8051 | 0.8055 | +0.0004 (flat — no train overfit) |
+| 150 extra (held-out proxy) | 0.7021 | 0.7243 | **+0.0222** |
+| 277 combined | 0.7493 | **0.7615** | **+0.0122** |
+
+The gain is driven by the held-out extra files, with zero train regression —
+the opposite signature of EXP-014's HPSS overfit. This is the screening rule
+working as intended.
+
+### Validation Results
+| Metric | EXP-012 | EXP-015 |
+|--------|---------|---------|
+| Onset F1 (127) | 0.8051 | 0.8055 |
+| Onset F1 (277) | 0.7493 | **0.7615** |
+| Beat F1 (127) | 0.7215 | 0.7215 |
+| Tempo (127) | 0.7698 | 0.7698 |
+| Mean (127) | 0.7655 | 0.7656 |
+
+Beat/tempo unchanged (fusion only touches onset detection). Predicted
+leaderboard: onset 0.75 → ~0.762, mean 0.7783 → ~0.782.
+
+### Decision
+KEEP. First onset change since the baseline that improves the generalization
+benchmark (+0.0122 on 277) rather than just the train set. Config defaults:
+`fusion=True, fusion_odfs=("superflux","complex"), threshold=0.055`.
+
+### Next
+Step 2 (planned): pure-numpy *learned* onset activation (logistic/MLP on ODF
+features) feeding the same peak picker, with k-fold held-out eval to avoid
+training-on-test. The complex-domain ODF is now an additional input feature for it.
+
+---
+
 <!-- Add new entries below this line -->

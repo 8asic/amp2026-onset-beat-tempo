@@ -74,6 +74,8 @@ def main():
     ap.add_argument("--hpss-kern-harm", type=int, default=None, help="HPSS harmonic median kernel (time frames)")
     ap.add_argument("--hpss-kern-perc", type=int, default=None, help="HPSS percussive median kernel (mel bins)")
     ap.add_argument("--extra-onsets", action="store_true", help="also evaluate on train_extra_onsets (150 files, onset-only)")
+    ap.add_argument("--fusion", action="store_true", help="enable multi-ODF fusion onset picking")
+    ap.add_argument("--fusion-odfs", default=None, help="comma-list of ODF channels: superflux,complex,hfc,phase")
     args = ap.parse_args()
 
     if args.tempo_method is not None:
@@ -98,6 +100,10 @@ def main():
         config.beat.beat_octave_select = False
     if args.octave_gate is not None:
         config.beat.beat_octave_gate = args.octave_gate
+    if args.fusion:
+        config.onset.fusion = True
+    if args.fusion_odfs is not None:
+        config.onset.fusion_odfs = tuple(args.fusion_odfs.split(","))
     if args.hpss:
         config.audio.hpss = True
     if args.hpss_kern_harm is not None:

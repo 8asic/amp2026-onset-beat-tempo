@@ -10,17 +10,20 @@
 
 | Rank | ID | Title | Expected Gain | Confidence | Effort | Risk |
 |------|----|-------|---------------|------------|--------|------|
-| 1 | EXP-012 | Residual tempo: beat-level multi-hypothesis / comb sub-harmonic pair for the 26 ambiguous-meter files | +0.01–0.03 tempo & beat | Medium | Moderate | Medium |
-| 2 | EXP-013 | HPSS percussive soft-mask before superflux (onset recall) | +0.005–0.02 onset F1 | Medium | Moderate | Low |
-| 3 | EXP-014 | Sub-frame parabolic interpolation of onset/beat peaks | +0.00–0.01 (polish) | Low | Easy | Low |
+| 1 | EXP-016 | Pure-numpy LEARNED onset activation (logistic/MLP on ODF features incl. complex-domain) → existing peak picker; k-fold held-out eval on 277 files | +0.01–0.03 onset (277) | Medium | Moderate (4–6h) | Medium (train-on-test if eval sloppy) |
+| 2 | EXP-017 | Residual tempo: beat-level multi-hypothesis for the 26 ambiguous-meter files | +0.01–0.03 tempo & beat | Medium | Moderate | Medium (overfit-prone) |
+| 3 | EXP-018 | Pure-numpy beat activation model (BLSTM-lite/TCN, hand-written BPTT) → existing DP | +0.03–0.08 beat | Medium | Hard (15–20h) | Medium |
+
+**Constraint:** neural models must be pure-numpy (PyTorch/TF not on the allowed
+list; madmom RNNs explicitly banned). Peak-picking/DP decision stays our own code.
 
 **Done (now in experiment_log.md):** EXP-004 (γ/μ sweep), EXP-005 (tight DP),
 EXP-006 (log-mel beat ODF), EXP-007 (tempo search floor), EXP-008 (comb_fusion
-tempo — DONE, replaced the old "windowed tempo" idea), EXP-009 (two-pass beat —
-REJECTED no-op), EXP-010 (multiband onset), EXP-011 (adaptive whitening).
-The old EXP-005 (percentile ODF norm) and EXP-009 (SuperFlux beat envelope) ideas
-are superseded — beat now uses log-mel flux (EXP-006) and onset uses
-multiband+whitening (EXP-010/011).
+tempo), EXP-009 (two-pass beat — REJECTED no-op), EXP-010 (multiband onset),
+EXP-011 (adaptive whitening), EXP-012 (beat octave-select), EXP-013 (beat phase —
+REJECTED no-op), EXP-014 (HPSS — REJECTED train overfit; established 277-file
+onset screening rule), EXP-015 (multi-ODF fusion superflux+complex — KEEP,
+onset 277 0.7493→0.7615).
 
 ---
 

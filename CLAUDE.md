@@ -141,21 +141,25 @@ on the `--extra-onsets` 150-file set to screen for train-set overfit. The combin
 277-file onset score (0.7493 at baseline) is the true generalization benchmark.
 Leaderboard onset (0.75) matches the combined-set score, not the train-only 0.8051.
 
-| Metric | Validation (127 files) | Leaderboard (EXP-012) |
-|--------|----------------------|----------------------|
-| Onset F1 | **0.8051** (EXP-011) | 0.75 |
-| Beat F1 | **0.7215** (EXP-012) | 0.725 |
-| Tempo p-score | **0.7698** (EXP-008) | **0.86** |
-| Mean | **0.7655** (EXP-012) | **0.7783** |
+| Metric | Validation (127 files) | Onset (277 files) | Leaderboard (EXP-012) |
+|--------|----------------------|-------------------|----------------------|
+| Onset F1 | **0.8055** (EXP-015) | **0.7615** (EXP-015) | 0.75 |
+| Beat F1 | **0.7215** (EXP-012) | — | 0.725 |
+| Tempo p-score | **0.7698** (EXP-008) | — | **0.86** |
+| Mean | **0.7656** (EXP-015) | — | **0.7783** |
+
+The 277-file onset score is the generalization benchmark (matches leaderboard);
+the 127-file onset is an over-optimistic outlier (see EXP-014/015).
 
 Progression: EXP-007 Mean=0.7325 → EXP-008 (comb_fusion tempo) 0.7568 →
 EXP-010 (multiband onset) 0.7593 → EXP-011 (whitening) 0.7629 →
-EXP-012 (beat octave-select) 0.7655.
-EXP-012 config: onset multiband (n_bands=2, merge_tol_ms=15, threshold=0.026),
-superflux_gamma=200, superflux_mu=3, whiten=True (decay=0.995, floor=0.10),
-dp_transition_width=0.10, dp_transition_lambda=1.0, tempo_search_min=60,
-tempo_method=comb_fusion, tempo_comb_harmonics=2,
-beat_octave_select=True (gate=78).
+EXP-012 (beat octave-select) 0.7655 → EXP-015 (multi-ODF fusion, onset 277:
+0.7493→0.7615) 0.7656/lb~0.782.
+EXP-015 config: onset fusion=True, fusion_odfs=("superflux","complex"),
+threshold=0.055, n_bands=2, merge_tol_ms=15, superflux_gamma=200, superflux_mu=3,
+whiten=True (decay=0.995, floor=0.10), dp_transition_width=0.10,
+dp_transition_lambda=1.0, tempo_search_min=60, tempo_method=comb_fusion,
+tempo_comb_harmonics=2, beat_octave_select=True (gate=78).
 
 ## Experiment Tracking
 
