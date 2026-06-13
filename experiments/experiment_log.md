@@ -863,9 +863,23 @@ working as intended.
 Beat/tempo unchanged (fusion only touches onset detection). Predicted
 leaderboard: onset 0.75 → ~0.762, mean 0.7783 → ~0.782.
 
+### Leaderboard Results (submitted 2026-06-12)
+| Metric | EXP-012 lb | EXP-015 lb | delta |
+|--------|-----------|-----------|-------|
+| Onset F1 | 0.75 | **0.775** | **+0.025** |
+| Beat F1 | 0.725 | 0.725 | 0 (unchanged) |
+| Tempo p-score | 0.86 | 0.86 | 0 (unchanged) |
+| Mean | 0.7783 | **~0.787** | **+0.0084** |
+
+The leaderboard onset (0.775) came in **above** both the prediction (~0.762)
+and the 277-proxy (0.7615). The test-set onset distribution generalizes even
+better for fusion than the extra-onset proxy suggested. The 277-proxy remains a
+conservative screen — it correctly predicted the *direction* and a lower bound.
+
 ### Decision
-KEEP. First onset change since the baseline that improves the generalization
-benchmark (+0.0122 on 277) rather than just the train set. Config defaults:
+KEEP — confirmed on leaderboard. First onset change since the baseline that
+improves both the generalization benchmark (+0.0122 on 277) AND the leaderboard
+(+0.025), not just the train set. Config defaults:
 `fusion=True, fusion_odfs=("superflux","complex"), threshold=0.055`.
 
 ### Next

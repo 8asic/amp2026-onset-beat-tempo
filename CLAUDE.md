@@ -141,15 +141,16 @@ on the `--extra-onsets` 150-file set to screen for train-set overfit. The combin
 277-file onset score (0.7493 at baseline) is the true generalization benchmark.
 Leaderboard onset (0.75) matches the combined-set score, not the train-only 0.8051.
 
-| Metric | Validation (127 files) | Onset (277 files) | Leaderboard (EXP-012) |
+| Metric | Validation (127 files) | Onset (277 files) | Leaderboard (EXP-015) |
 |--------|----------------------|-------------------|----------------------|
-| Onset F1 | **0.8055** (EXP-015) | **0.7615** (EXP-015) | 0.75 |
+| Onset F1 | **0.8055** (EXP-015) | **0.7615** (EXP-015) | **0.775** |
 | Beat F1 | **0.7215** (EXP-012) | — | 0.725 |
 | Tempo p-score | **0.7698** (EXP-008) | — | **0.86** |
-| Mean | **0.7656** (EXP-015) | — | **0.7783** |
+| Mean | **0.7656** (EXP-015) | — | **~0.787** |
 
-The 277-file onset score is the generalization benchmark (matches leaderboard);
-the 127-file onset is an over-optimistic outlier (see EXP-014/015).
+The 277-file onset score is the generalization benchmark (a conservative lower
+bound for the leaderboard); the 127-file onset is an over-optimistic outlier
+(see EXP-014/015). EXP-015 leaderboard onset (0.775) beat the 277-proxy (0.7615).
 
 Progression: EXP-007 Mean=0.7325 → EXP-008 (comb_fusion tempo) 0.7568 →
 EXP-010 (multiband onset) 0.7593 → EXP-011 (whitening) 0.7629 →
