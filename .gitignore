@@ -32,6 +32,7 @@ experiments/.cache_beat/
 # the SHIPPED beat model (models/beat_blstm.pt) IS committed for reproducibility.
 models/*.npz
 models/beat_blstm_extra.pt
+models/onset_cnn_extra.pt
 
 # IDE
 .vscode/

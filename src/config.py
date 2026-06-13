@@ -45,7 +45,7 @@ class OnsetConfig:
     learned_delta: float = 0.18  # peak-pick threshold on the learned activation
     cnn: bool = True          # EXP-020: PyTorch onset CNN -> picker (needs torch + weights, else falls back to fusion)
     cnn_model_path: str = "models/onset_cnn.pt"  # trained onset CNN weights (Colab)
-    cnn_delta: float = 0.20   # peak-pick threshold on the CNN activation
+    cnn_delta: float = 0.30   # peak-pick threshold on the CNN activation
 
 
 @dataclass

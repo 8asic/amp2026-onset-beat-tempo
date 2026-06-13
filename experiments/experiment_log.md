@@ -1077,4 +1077,58 @@ Leaderboard mean ~ (0.775+0.735+0.86)/3 = 0.790.
 
 ---
 
+## EXP-020 — Onset CNN (PyTorch / Colab) — SHIPPED (uncertain bet)
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-020 |
+| **Date** | 2026-06-13/14 |
+| **Status** | SHIPPED — config.onset.cnn=True, delta=0.30. Marginal/uncertain vs fusion; easy rollback (cnn=False). |
+
+### Motivation
+Onset is our worst leaderboard rank (18th, 0.775; top 0.881). Top scores imply
+learned onset detectors. PyTorch approved (EXP-018). Mirror the beat playbook.
+
+### Method
+Fully-convolutional onset CNN (convs preserve time, pool over freq) -> per-frame
+onset activation -> our `OnsetDetector._pick` (delta 0.30; no librosa.onset, no
+madmom). Stabilized training (grad-clip, ReduceLROnPlateau, early-stop). Data:
+277 onset files (127 main + 150 extra_onsets). `notebooks/03_onset_model.ipynb`.
+
+### Fair test (train 150 extra-only, eval 127 c127)
+| model | fair c127 |
+|-------|-----------|
+| small CNN (33k) | **0.7881** |
+| big CNN (130k) + augmentation | 0.7740 (REGRESSED - onset data-limited) |
+| fusion on the 127 themselves | 0.8055 |
+| fusion leaderboard (unseen) | 0.775 |
+
+Enlarging + augmentation HURT - only 277 onset files (vs beat's 823), so capacity
+overfits and aug washes out sparse onset evidence. Kept the small 16/32/32 CNN.
+All-277 model on a random held-out c127 (26 files): 0.7922 (delta 0.30),
+consistent with the dedicated fair 0.7881. Delta swept on 127: peak 0.30 (0.8081
+optimistic, vs fusion 0.8055).
+
+### Why ship despite fusion winning on the 127 files
+Fusion's 0.8055 is its score on the 127 files THEMSELVES; its true generalization
+is the leaderboard 0.775. The CNN's fair c127 (0.7881, trained on zero c127) is an
+unseen-c127 number, directly comparable to fusion's 0.775 -> CNN +0.013. The beat
+precedent (fair-c127 0.7335 -> leaderboard 0.735, exact) says this transfers, so
+predicted onset ~0.788 > fusion 0.775. Honest caveat: data-limited, within noise;
+the on-127 comparison favours fusion, so this is a genuine bet, not a sure thing.
+
+### Wiring
+`OnsetDetector` tries the CNN first (models/onset_cnn.pt; loader infers conv
+channels from the checkpoint -> arch-agnostic), falls back to fusion if torch/
+weights absent. `config.onset.cnn=True, cnn_delta=0.30`. Verified: fallback gives
+fusion 0.8055; CNN path reproduces notebook numbers exactly. Optimistic full
+pipeline on 127: onset 0.8081, beat 0.7631.
+
+### Decision
+SHIPPED. Submission `submissions/EXP-020_*/predictions.json` (CNN onset + BLSTM
+beat). Easy rollback: `config.onset.cnn=False` -> fusion onset. *Record leaderboard
+onset here when it lands; if <= 0.775, revert.*
+
+---
+
 <!-- Add new entries below this line -->

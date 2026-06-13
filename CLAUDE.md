@@ -164,7 +164,11 @@ Progression: EXP-007 Mean=0.7325 → EXP-008 (comb_fusion tempo) 0.7568 →
 EXP-010 (multiband onset) 0.7593 → EXP-011 (whitening) 0.7629 →
 EXP-012 (beat octave-select) 0.7655 → EXP-015 (multi-ODF fusion, onset 277:
 0.7493→0.7615) 0.7656/lb~0.782 → EXP-018 (learned BLSTM beat, fair c127
-0.7215→0.7335).
+0.7215→0.7335, lb 0.735) → EXP-020 (learned onset CNN SHIPPED, fair c127 0.7881,
+pending lb; rollback config.onset.cnn=False).
+Learned models (PyTorch, Colab-trained): beat_blstm.pt (EXP-018, shipped, clear
+win) and onset_cnn.pt (EXP-020, shipped, uncertain bet). Both need torch at
+inference; both fall back to DSP if torch/weights absent.
 EXP-015 config: onset fusion=True, fusion_odfs=("superflux","complex"),
 threshold=0.055, n_bands=2, merge_tol_ms=15, superflux_gamma=200, superflux_mu=3,
 whiten=True (decay=0.995, floor=0.10), dp_transition_width=0.10,
