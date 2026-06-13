@@ -80,6 +80,7 @@ def main():
     ap.add_argument("--learned-delta", type=float, default=None, help="peak-pick delta on learned activation")
     ap.add_argument("--learned-beat", action="store_true", help="EXP-018: BLSTM beat activation (needs torch + models/beat_blstm.pt)")
     ap.add_argument("--beat-decode", default=None, choices=["A", "B"], help="EXP-018 decode: B=comb_fusion+octave (default), A=autocorr-on-activation")
+    ap.add_argument("--beat-model", default=None, help="EXP-018 override beat model path (e.g. models/beat_blstm_extra.pt for the fair test)")
     args = ap.parse_args()
 
     if args.tempo_method is not None:
@@ -116,6 +117,8 @@ def main():
         config.beat.learned = True
     if args.beat_decode is not None:
         config.beat.learned_decode = args.beat_decode
+    if args.beat_model is not None:
+        config.beat.learned_model_path = args.beat_model
     if args.hpss:
         config.audio.hpss = True
     if args.hpss_kern_harm is not None:
