@@ -60,6 +60,9 @@ class BeatConfig:
     beat_octave_select: bool = True    # EXP-012: pick beat octave by on/off-beat onset contrast (slow tempos only)
     beat_octave_gate: float = 78.0     # only octave-select when base tempo below this
     eval_window_ms: float = 70.0
+    learned: bool = False              # EXP-018: BLSTM beat activation -> tempo+DP (flip to True when weights land)
+    learned_model_path: str = "models/beat_blstm.pt"  # PyTorch BLSTM weights (Colab-trained)
+    learned_decode: str = "B"          # "B": comb_fusion tempo + octave-select (default); "A": _estimate_tempo_from_env
 
 
 @dataclass
