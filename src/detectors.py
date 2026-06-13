@@ -17,11 +17,13 @@ class OnsetDetector:
         self.cfg = cfg or config
         self.fe = FeatureExtractor(cfg)
         self._learned_model = None  # lazily loaded LearnedOnsetModel (EXP-016)
+        self._onset_cnn = None      # lazily loaded EXP-020 PyTorch onset CNN
 
     def detect(self, y: np.ndarray, sr: int) -> np.ndarray:
-        """Onset detection: superflux + custom LFSF peak picking (L04 slide 64).
+        """Onset detection: onset-strength path feeds the SAME hand-written picker.
 
-        Three onset-strength paths feed the SAME hand-written peak picker:
+        Paths (first available wins):
+        - cnn (EXP-020): PyTorch CNN activation over log-mel (needs torch+weights)
         - learned (EXP-016): pure-numpy LR activation over ODF channels
         - fusion (EXP-015): per-ODF-channel picking + cross-channel merge
         - multiband (EXP-010): per-mel-band superflux picking + merge
@@ -29,6 +31,16 @@ class OnsetDetector:
         """
         fps = sr / self.cfg.audio.onset_hop_length
         delta = self.cfg.onset.threshold
+
+        if self.cfg.onset.cnn:
+            act = self._onset_cnn_activation(y, sr)
+            if act is not None:
+                peaks = self._pick(act, fps, self.cfg.onset.cnn_delta)
+                return librosa.frames_to_time(
+                    np.array(peaks, dtype=int), sr=sr,
+                    hop_length=self.cfg.audio.onset_hop_length,
+                )
+            # torch/weights unavailable -> fall through to fusion below
 
         if self.cfg.onset.learned:
             model = self._get_learned_model()
@@ -107,6 +119,85 @@ class OnsetDetector:
                     "set them equal so inference features match training."
                 )
         return self._learned_model
+
+    def _load_onset_cnn(self):
+        """Lazily load the EXP-020 onset CNN checkpoint (torch optional).
+
+        Returns a dict {net, torch, mu, sd, hop, n_fft, n_mels, fmin, fmax} or
+        None if torch is unavailable or the weights file is missing (then the
+        caller falls back to the fusion onset). Rebuilds the small 16/32/32 CNN.
+        """
+        if self._onset_cnn is not None:
+            return self._onset_cnn
+        path = self.cfg.onset.cnn_model_path
+        if not Path(path).is_absolute():
+            path = self.cfg.paths.base_dir / path
+        if not Path(path).exists():
+            return None
+        try:
+            import torch
+            import torch.nn as nn
+        except ImportError:
+            return None
+
+        ckpt = torch.load(path, map_location="cpu", weights_only=False)
+        sd = ckpt["state_dict"]
+        # Infer conv channels + head width from the checkpoint so this loads
+        # whatever architecture was trained (small 16/32/32 or larger variants).
+        c1 = sd["conv.0.weight"].shape[0]
+        c2 = sd["conv.4.weight"].shape[0]
+        c3 = sd["conv.8.weight"].shape[0]
+        hidden = sd["head.0.weight"].shape[0]
+
+        class OnsetCNN(nn.Module):
+            def __init__(self, n_mels):
+                super().__init__()
+                self.conv = nn.Sequential(
+                    nn.Conv2d(1, c1, (3, 3), padding=(1, 1)), nn.BatchNorm2d(c1), nn.ReLU(),
+                    nn.MaxPool2d((1, 3)),
+                    nn.Conv2d(c1, c2, (3, 3), padding=(1, 1)), nn.BatchNorm2d(c2), nn.ReLU(),
+                    nn.MaxPool2d((1, 3)),
+                    nn.Conv2d(c2, c3, (3, 3), padding=(1, 1)), nn.BatchNorm2d(c3), nn.ReLU(),
+                )
+                with torch.no_grad():
+                    f = self.conv(torch.zeros(1, 1, 8, n_mels)).shape[-1]
+                self.head = nn.Sequential(
+                    nn.Linear(c3 * f, hidden), nn.ReLU(), nn.Dropout(0.3), nn.Linear(hidden, 1))
+
+            def forward(self, x):
+                h = self.conv(x.unsqueeze(1))
+                B, C, T, F = h.shape
+                h = h.permute(0, 2, 1, 3).reshape(B, T, C * F)
+                return self.head(h).squeeze(-1)
+
+        net = OnsetCNN(int(ckpt["n_mels"]))
+        net.load_state_dict(sd)
+        net.eval()
+        self._onset_cnn = {
+            "net": net, "torch": torch,
+            "mu": np.asarray(ckpt["mu"], dtype=np.float64),
+            "sd": np.asarray(ckpt["sd"], dtype=np.float64),
+            "n_mels": int(ckpt["n_mels"]), "hop": int(ckpt["hop"]),
+            "n_fft": int(ckpt["n_fft"]),
+            "fmin": float(ckpt["fmin"]), "fmax": float(ckpt["fmax"]),
+        }
+        return self._onset_cnn
+
+    def _onset_cnn_activation(self, y: np.ndarray, sr: int):
+        """Per-frame onset activation from the CNN; None if model unavailable."""
+        m = self._load_onset_cnn()
+        if m is None:
+            return None
+        mel = librosa.feature.melspectrogram(
+            y=y, sr=sr, n_fft=m["n_fft"], hop_length=m["hop"], n_mels=m["n_mels"],
+            fmin=m["fmin"], fmax=m["fmax"],
+        )
+        feat = (np.log1p(mel).T - m["mu"]) / m["sd"]      # (T, n_mels)
+        torch = m["torch"]
+        with torch.no_grad():
+            t = torch.from_numpy(feat.astype(np.float32)).unsqueeze(0)
+            act = torch.sigmoid(m["net"](t)).squeeze(0).numpy().astype(np.float64)
+        return act
 
 
 class BeatTracker:

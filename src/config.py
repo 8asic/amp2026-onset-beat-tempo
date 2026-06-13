@@ -43,6 +43,9 @@ class OnsetConfig:
     learned: bool = False     # EXP-016: pure-numpy learned onset activation -> picker
     learned_model_path: str = "models/onset_lr.npz"  # trained LR weights
     learned_delta: float = 0.18  # peak-pick threshold on the learned activation
+    cnn: bool = True          # EXP-020: PyTorch onset CNN -> picker (needs torch + weights, else falls back to fusion)
+    cnn_model_path: str = "models/onset_cnn.pt"  # trained onset CNN weights (Colab)
+    cnn_delta: float = 0.20   # peak-pick threshold on the CNN activation
 
 
 @dataclass
