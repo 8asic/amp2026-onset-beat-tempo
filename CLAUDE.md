@@ -147,10 +147,10 @@ is c127-like. Weight model comparisons toward the c127 subset.
 
 | Metric | Validation (127 files) | Generalization | Leaderboard |
 |--------|----------------------|----------------|-------------|
-| Onset F1 | **0.8055** (EXP-015) | 0.7615 (277-file) | **0.775** (EXP-015) |
-| Beat F1 | 0.7631 opt / **0.7335 fair** (EXP-018) | 0.7335 (fair c127) | 0.725 (pre-EXP-018) |
-| Tempo p-score | **0.7698** (EXP-008) | — | **0.86** |
-| Mean | **0.7795** (EXP-018, opt beat) | — | **~0.787** (pre-EXP-018) |
+| Onset F1 | **0.8055** (EXP-015) | 0.7615 (277-file) | **0.775** (18th, top 0.881) |
+| Beat F1 | 0.7631 opt / **0.7335 fair** (EXP-018) | 0.7335 (fair c127) | **0.735** (7th, top 0.861) |
+| Tempo p-score | **0.7698** (EXP-008) | — | **0.86** (6th, top 0.91) |
+| Mean | **0.7795** (EXP-018, opt beat) | — | **~0.790** |
 
 Generalization benchmarks (not the 127-train, which is over-optimistic):
 - **Onset**: 277-file score (127 train + 150 extra) tracks the leaderboard.

@@ -1062,9 +1062,14 @@ committed (all-823 stabilised model). Onset/tempo untouched. Inference needs
 torch (falls back to log-mel flux if torch/weights absent). Validation mean
 (127, optimistic beat) 0.7795; honest fair beat 0.7335.
 
-### Leaderboard
-Pending: regenerate submission via `01_pipeline.ipynb` and upload. Expected beat
-0.725 → ~0.74. *(record result here when it lands.)*
+### Leaderboard (submitted 2026-06-13, beats page only)
+**Beat F-measure 0.725 → 0.735 (+0.010), now 7th.** The fair c127 test predicted
+0.7335 — the leaderboard came in 0.735, within 0.0015. The fair-evaluation
+methodology (train-696-only, eval-c127, decode B) predicted the test almost
+exactly. Onset/tempo NOT re-uploaded (their predictions are byte-identical to
+EXP-015 — EXP-018 only changed the beat ODF), so they stay 0.775 / 0.86.
+Standings: onset 18th (top 0.881), beat 7th (top 0.861), tempo 6th (top 0.91).
+Leaderboard mean ~ (0.775+0.735+0.86)/3 = 0.790.
 
 ### Notebook artifacts
 `notebooks/02_beat_model.ipynb` (TRAIN_ON_EXTRA_ONLY toggle: True=fair test →
