@@ -90,7 +90,7 @@ def make_labels(gt_onsets, T, label_w):
 
 def build_dataset(loader, data, fe, ctx, label_w, tag):
     """Per-file (X, y, gt_onsets). Cached to disk keyed by feature config."""
-    key = f"{tag}_ctx{ctx}_lw{label_w}_odfs{'-'.join(config.onset.fusion_odfs)}"
+    key = f"{tag}_ctx{ctx}_lw{label_w}_nb{config.onset.n_bands}_odfs{'-'.join(config.onset.fusion_odfs)}"
     cpath = FEAT_CACHE / f"{key}.npz"
     if cpath.exists():
         d = np.load(cpath, allow_pickle=True)
@@ -176,13 +176,21 @@ def main():
     ap.add_argument("--w-pos", type=float, default=5.0, help="positive class weight")
     ap.add_argument("--folds", type=int, default=5)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--odfs", default=None, help="EXP-019: comma ODF channels e.g. superflux,complex,hfc,phase")
+    ap.add_argument("--n-bands", type=int, default=None, help="EXP-019: superflux mel-band count (more = finer spectral features)")
     args = ap.parse_args()
+
+    if args.odfs is not None:
+        config.onset.fusion_odfs = tuple(args.odfs.split(","))
+    if args.n_bands is not None:
+        config.onset.n_bands = args.n_bands
 
     loader = DataLoader()
     train = loader.load_train(ROOT / "data" / "processed" / "train")
     extra = loader.load_extra_onsets(ROOT / "data" / "processed" / "train_extra_onsets")
     all_data = {**train, **extra}
     print(f"Onset-labelled files: {len(all_data)} (127 train + {len(extra)} extra)")
+    print(f"ODF channels: {config.onset.fusion_odfs}, n_bands={config.onset.n_bands}")
 
     fe = FeatureExtractor()
     print("Building features (cached)...")

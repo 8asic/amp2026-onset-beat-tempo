@@ -956,4 +956,79 @@ most promising path to revisit it. `config.onset.learned` remains False.
 
 ---
 
+## EXP-019 — Richer features for the learned onset model — PARITY (banked, not shipped)
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-019 |
+| **Date** | 2026-06-12 |
+| **Status** | Validated candidate, NOT shipped (user chose to move to EXP-018); fusion stays live |
+
+### Motivation
+EXP-016 showed the learned onset model loses to fusion on the test-relevant c127
+corpus (−0.027). Try richer features so it can match fusion *on c127* (the bar),
+exploiting the now-known rule: judge on c127, not the 277-average.
+
+### Method
+Added `--odfs` and `--n-bands` to the prototype. Swept ODF channel sets
+(superflux/complex/hfc/phase) and superflux band counts (2→16), context width,
+and LR vs MLP. Judged on held-out c127 (fixed delta=0.18).
+
+### Results (held-out c127; fusion bar = 0.8055, leakage-inflated)
+| config | c127 | extra |
+|--------|------|-------|
+| LR sf,cx nb2 (EXP-016) | 0.7784 | 0.766 |
+| LR +hfc+phase nb2 | 0.7855 | 0.760 |
+| LR nb8 +all ODFs | 0.7994 | 0.761 |
+| LR nb8/12 (plateau) | ~0.799 | — |
+| **MLP h64 nb8 +all ODFs** | **0.8048** (seeds: .8048/.8043/.8053) | 0.737 |
+| MLP h96 nb8 +all ODFs | 0.8064 | 0.735 |
+
+LR plateaus ~0.799 (−0.006 vs fusion). The MLP with rich features reaches c127
+≈ 0.805 — a stable **tie** with fusion (±0.0005 across seeds), and beats fusion
+on extra. Crucially the MLP's 0.805 is **held-out** while fusion's 0.8055 is
+leakage-inflated (threshold tuned on the 277 incl. these files; fusion's true
+generalization is the lb 0.775). So the MLP is fairly ≥ fusion on c127.
+
+### Decision
+PARITY achieved — a genuine low-downside ship candidate (expected lb onset ~0 to
++0.02). NOT shipped: user opted to invest the next effort in EXP-018 (beat), which
+has far more headroom (lb beat 0.725). Kept as validated infrastructure; revisit
+if we want to bank the small onset upside on a spare leaderboard slot. Fusion
+(EXP-015, lb 0.775) remains the live onset detector.
+
+---
+
+## EXP-018 — Beat BLSTM (PyTorch / Colab) — IN PROGRESS
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-018 |
+| **Date** | 2026-06-12 |
+| **Status** | IN PROGRESS — notebook built; training in Colab; src integration pending review |
+
+### Decision to use PyTorch (rules note)
+User explicitly approved PyTorch for a **self-trained** model (not on the original
+allowed-list, but distinct from the banned madmom pre-trained trackers). Hard
+lines kept: no madmom, no `librosa.beat.beat_track`; the tempo+DP phase decoder
+stays our own code. This is the user's rules-interpretation call.
+
+### Plan (per user spec)
+- Bidirectional LSTM (1–2 layers, hidden 64–128), input log-mel (81 bands, hop
+  512, win 2048, 22050 Hz), output per-frame beat-activation probability (BCE,
+  pos-weighted). Labels: ±1 frame of a GT beat.
+- Data: 696 `train_extra_tempobeats` + 127 main = 823 files, 80/20 split.
+- Decode: activation → our `_estimate_tempo_from_env` + `_dp_beats` (no librosa).
+- Notebook: `notebooks/02_beat_model.ipynb` (Colab-ready: installs deps, clones
+  repo, mounts Drive for data). Saves `models/beat_blstm.pt`.
+- Success: held-out beat F1 > 0.45; report autocorr baseline vs BLSTM.
+- `src/detectors.py` `BeatTracker` to load the model when weights exist, else
+  fall back to the autocorrelation tracker — **pending explicit user confirmation
+  before writing**.
+
+### Next
+User runs the notebook in Colab; then confirm + wire `BeatTracker`.
+
+---
+
 <!-- Add new entries below this line -->
