@@ -1126,8 +1126,18 @@ pipeline on 127: onset 0.8081, beat 0.7631.
 
 ### Decision
 SHIPPED. Submission `submissions/EXP-020_*/predictions.json` (CNN onset + BLSTM
-beat). Easy rollback: `config.onset.cnn=False` -> fusion onset. *Record leaderboard
-onset here when it lands; if <= 0.775, revert.*
+beat). Easy rollback: `config.onset.cnn=False` -> fusion onset.
+
+### Leaderboard (submitted 2026-06-14, onsets page)
+**Onset F-measure 0.775 -> 0.807 (+0.032), 18th -> 14th.** The bet paid off, and
+by MORE than predicted (fair c127 0.7881 suggested ~0.788). Why the under-predict:
+the onset fair model trained on only 150 extra files; the SHIP model trained on
+all 277 (+46% data, *including* the 127 c127 = test distribution), which boosted
+test-50 well above the fair floor. Contrast beat: its fair model already had 696,
+ship added only 127 (+15%), so beat transferred ~1:1 (0.7335->0.735). **Lesson:
+the fair-c127 floor is conservative when the ship model adds a large fraction of
+test-distribution data.** Leaderboard mean now ~(0.807+0.735+0.86)/3 = 0.8007.
+Standings: onset 14th (top 0.881), beat 7th (top 0.861), tempo 6th (top 0.91).
 
 ---
 

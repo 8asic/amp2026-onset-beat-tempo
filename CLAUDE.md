@@ -147,10 +147,10 @@ is c127-like. Weight model comparisons toward the c127 subset.
 
 | Metric | Validation (127 files) | Generalization | Leaderboard |
 |--------|----------------------|----------------|-------------|
-| Onset F1 | **0.8055** (EXP-015) | 0.7615 (277-file) | **0.775** (18th, top 0.881) |
+| Onset F1 | 0.8081 opt (EXP-020 CNN) | 0.7881 (fair c127) | **0.807** (14th, top 0.881) |
 | Beat F1 | 0.7631 opt / **0.7335 fair** (EXP-018) | 0.7335 (fair c127) | **0.735** (7th, top 0.861) |
 | Tempo p-score | **0.7698** (EXP-008) | — | **0.86** (6th, top 0.91) |
-| Mean | **0.7795** (EXP-018, opt beat) | — | **~0.790** |
+| Mean | — | — | **~0.8007** |
 
 Generalization benchmarks (not the 127-train, which is over-optimistic):
 - **Onset**: 277-file score (127 train + 150 extra) tracks the leaderboard.
@@ -164,8 +164,8 @@ Progression: EXP-007 Mean=0.7325 → EXP-008 (comb_fusion tempo) 0.7568 →
 EXP-010 (multiband onset) 0.7593 → EXP-011 (whitening) 0.7629 →
 EXP-012 (beat octave-select) 0.7655 → EXP-015 (multi-ODF fusion, onset 277:
 0.7493→0.7615) 0.7656/lb~0.782 → EXP-018 (learned BLSTM beat, fair c127
-0.7215→0.7335, lb 0.735) → EXP-020 (learned onset CNN SHIPPED, fair c127 0.7881,
-pending lb; rollback config.onset.cnn=False).
+0.7215→0.7335, lb 0.735) → EXP-020 (learned onset CNN, lb 0.775->0.807,
+14th; rollback config.onset.cnn=False). Leaderboard mean ~0.8007.
 Learned models (PyTorch, Colab-trained): beat_blstm.pt (EXP-018, shipped, clear
 win) and onset_cnn.pt (EXP-020, shipped, uncertain bet). Both need torch at
 inference; both fall back to DSP if torch/weights absent.
