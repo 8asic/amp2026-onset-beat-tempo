@@ -889,4 +889,71 @@ training-on-test. The complex-domain ODF is now an additional input feature for 
 
 ---
 
+## EXP-016 — Pure-Numpy Learned Onset Activation — REJECTED for submission (KEEP as asset)
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-016 |
+| **Date** | 2026-06-12 |
+| **Status** | REJECTED for submission (loses on the test-relevant corpus); code KEPT as inert, validated infrastructure (`config.onset.learned=False`) |
+
+### Motivation
+A fixed onset threshold cannot adapt per-frame (quiet folk vs loud electronic).
+A learned per-frame classifier on the existing ODF channels (superflux bands +
+complex-domain) could learn an adaptive decision, feeding the SAME hand-written
+peak picker (rules-clean: pure-numpy LR/MLP, no library classifier/peak-picker).
+
+### Method
+- Features: ODF channels (superflux bands + complex) context-stacked ±5 frames → 33 dims.
+- Labels: frame positive within ±`label_w` frames of a GT onset.
+- Model: class-weighted logistic regression, hand-written forward + gradient (numpy).
+- Eval: 5-fold CV over the 277 onset-labelled files; the classifier scores only
+  on files it did NOT train on. Peak-pick delta swept; gain robust across delta.
+
+### CV results (277-file, held-out)
+| model | held-out onset F1 | vs fusion 0.7615 |
+|-------|-------------------|------------------|
+| MLP h=32 | 0.7628 | +0.0013 (overfits) |
+| LR ctx5 lw2 wpos5 | 0.7651 | +0.0036 |
+| LR ctx5 lw1 wpos5 | 0.7724 | +0.0109 |
+| **LR ctx5 lw1 wpos2** | **0.7729** | **+0.0114** |
+LR not overfitting: train-on-train 277 = 0.7720 ≈ CV 0.7729. label_w=1 (sharp
+labels) was the key lever; MLP added nothing (overfits this data).
+
+### Why it is REJECTED despite winning the 277-CV — the decisive subset split
+Held-out F1 split by corpus (fixed delta=0.18):
+| corpus | fusion | learned (held-out) | winner |
+|--------|--------|--------------------|--------|
+| **c127** (challenge main corpus) | **0.8055** | 0.7784 | **fusion +0.027** |
+| extra-150 (supplementary) | 0.7242 | 0.7659 | learned +0.042 |
+| 277 combined | 0.7615 | 0.7729 | learned +0.011 |
+
+The learned model's 277-CV advantage is **entirely** from the extra-onset corpus.
+The leaderboard tells us which corpus the 50 test files resemble: EXP-015 fusion
+scored **0.775** on the leaderboard, which sits at the **c127 level** (0.8055),
+far above the 277 (0.7615) or extra (0.7242) levels. So the test set is
+distributed like c127 — where **fusion beats the learned model by +0.027**.
+Submitting the learned model would very likely REGRESS leaderboard onset below
+0.775.
+
+### Methodological lesson (important)
+The 277-combined proxy is the right screen for *overfit* (EXP-014) and for
+confirming a same-distribution gain (EXP-015). But when comparing two models
+with DIFFERENT per-subset profiles, the 277-average can MISLEAD: it rewarded the
+learned model for gains on the extra corpus that the test set under-represents.
+**When choosing between models, also split the proxy by corpus and weight by the
+corpus the leaderboard shows the test resembles (c127).** The leaderboard onset
+level is the tell for which corpus the test matches.
+
+### Decision
+REJECTED for submission — fusion (EXP-015, lb 0.775) stays the onset detector.
+KEEP the code as inert, validated infrastructure (`src/learned_onset.py`, config
+`learned`/`learned_model_path`/`learned_delta`, OnsetDetector learned path,
+`notebooks/02_learned_onset.ipynb`, `experiments/exp016_learned_onset.py` +
+`train_onset_model.py`). It already beats fusion on the extra corpus; with richer
+features (more ODFs, mel context) it may eventually beat fusion on c127 too — the
+most promising path to revisit it. `config.onset.learned` remains False.
+
+---
+
 <!-- Add new entries below this line -->

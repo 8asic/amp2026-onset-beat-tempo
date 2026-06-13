@@ -76,6 +76,8 @@ def main():
     ap.add_argument("--extra-onsets", action="store_true", help="also evaluate on train_extra_onsets (150 files, onset-only)")
     ap.add_argument("--fusion", action="store_true", help="enable multi-ODF fusion onset picking")
     ap.add_argument("--fusion-odfs", default=None, help="comma-list of ODF channels: superflux,complex,hfc,phase")
+    ap.add_argument("--learned", action="store_true", help="EXP-016: learned onset activation (NOTE: on 277 this is train-on-train, optimistic; honest number is CV)")
+    ap.add_argument("--learned-delta", type=float, default=None, help="peak-pick delta on learned activation")
     args = ap.parse_args()
 
     if args.tempo_method is not None:
@@ -104,6 +106,10 @@ def main():
         config.onset.fusion = True
     if args.fusion_odfs is not None:
         config.onset.fusion_odfs = tuple(args.fusion_odfs.split(","))
+    if args.learned:
+        config.onset.learned = True
+    if args.learned_delta is not None:
+        config.onset.learned_delta = args.learned_delta
     if args.hpss:
         config.audio.hpss = True
     if args.hpss_kern_harm is not None:

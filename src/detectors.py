@@ -2,10 +2,12 @@
 
 import numpy as np
 import librosa
+from pathlib import Path
 from typing import Tuple, Optional, List
 
 from .config import config
 from .features import FeatureExtractor
+from .learned_onset import LearnedOnsetModel
 
 
 class OnsetDetector:
@@ -14,18 +16,26 @@ class OnsetDetector:
     def __init__(self, cfg=None):
         self.cfg = cfg or config
         self.fe = FeatureExtractor(cfg)
-    
+        self._learned_model = None  # lazily loaded LearnedOnsetModel (EXP-016)
+
     def detect(self, y: np.ndarray, sr: int) -> np.ndarray:
         """Onset detection: superflux + custom LFSF peak picking (L04 slide 64).
 
-        Multiband mode (config.onset.multiband) runs the picker independently on
-        each mel-band ODF and merges peaks across bands — recovers soft onsets
-        that are salient in one band but buried in the all-band sum.
+        Three onset-strength paths feed the SAME hand-written peak picker:
+        - learned (EXP-016): pure-numpy LR activation over ODF channels
+        - fusion (EXP-015): per-ODF-channel picking + cross-channel merge
+        - multiband (EXP-010): per-mel-band superflux picking + merge
+        The picker (`_pick`) always makes the musical decision.
         """
         fps = sr / self.cfg.audio.onset_hop_length
         delta = self.cfg.onset.threshold
 
-        if self.cfg.onset.fusion:
+        if self.cfg.onset.learned:
+            model = self._get_learned_model()
+            chans = self.fe.onset_channels(y)  # uses config.onset.fusion_odfs
+            act = model.predict_activation(chans)
+            peaks = self._pick(act, fps, self.cfg.onset.learned_delta)
+        elif self.cfg.onset.fusion:
             chans = self.fe.onset_channels(y)
             frames: list[int] = []
             for k in range(chans.shape[0]):
@@ -82,6 +92,21 @@ class OnsetDetector:
             if f - merged[-1] > tol:
                 merged.append(f)
         return merged
+
+    def _get_learned_model(self) -> LearnedOnsetModel:
+        """Lazily load the EXP-016 learned onset model and verify channel match."""
+        if self._learned_model is None:
+            path = self.cfg.onset.learned_model_path
+            if not Path(path).is_absolute():
+                path = self.cfg.paths.base_dir / path
+            self._learned_model = LearnedOnsetModel.load(path)
+            if tuple(self.cfg.onset.fusion_odfs) != self._learned_model.odfs:
+                raise ValueError(
+                    f"learned model ODF channels {self._learned_model.odfs} "
+                    f"!= config.onset.fusion_odfs {tuple(self.cfg.onset.fusion_odfs)}; "
+                    "set them equal so inference features match training."
+                )
+        return self._learned_model
 
 
 class BeatTracker:

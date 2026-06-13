@@ -10,12 +10,14 @@
 
 | Rank | ID | Title | Expected Gain | Confidence | Effort | Risk |
 |------|----|-------|---------------|------------|--------|------|
-| 1 | EXP-016 | Pure-numpy LEARNED onset activation (logistic/MLP on ODF features incl. complex-domain) → existing peak picker; k-fold held-out eval on 277 files | +0.01–0.03 onset (277) | Medium | Moderate (4–6h) | Medium (train-on-test if eval sloppy) |
-| 2 | EXP-017 | Residual tempo: beat-level multi-hypothesis for the 26 ambiguous-meter files | +0.01–0.03 tempo & beat | Medium | Moderate | Medium (overfit-prone) |
-| 3 | EXP-018 | Pure-numpy beat activation model (BLSTM-lite/TCN, hand-written BPTT) → existing DP | +0.03–0.08 beat | Medium | Hard (15–20h) | Medium |
+| 1 | EXP-017 | Residual tempo: beat-level multi-hypothesis for the 26 ambiguous-meter files | +0.01–0.03 tempo & beat | Medium | Moderate | Medium (overfit-prone) |
+| 2 | EXP-018 | Pure-numpy beat activation model (BLSTM-lite/TCN, hand-written BPTT) → existing DP | +0.03–0.08 beat | Medium | Hard (15–20h) | Medium |
+| 3 | EXP-019 | Richer features for the learned onset model (more ODFs, mel context) to beat fusion on the c127 corpus | +0.00–0.02 onset (c127) | Low–Med | Moderate | Medium (must beat fusion on c127, not just 277) |
 
 **Constraint:** neural models must be pure-numpy (PyTorch/TF not on the allowed
 list; madmom RNNs explicitly banned). Peak-picking/DP decision stays our own code.
+**Model-comparison rule (EXP-016):** judge onset models on the c127 subset
+(what the test resembles), not just the 277-average — they can disagree.
 
 **Done (now in experiment_log.md):** EXP-004 (γ/μ sweep), EXP-005 (tight DP),
 EXP-006 (log-mel beat ODF), EXP-007 (tempo search floor), EXP-008 (comb_fusion
@@ -23,7 +25,9 @@ tempo), EXP-009 (two-pass beat — REJECTED no-op), EXP-010 (multiband onset),
 EXP-011 (adaptive whitening), EXP-012 (beat octave-select), EXP-013 (beat phase —
 REJECTED no-op), EXP-014 (HPSS — REJECTED train overfit; established 277-file
 onset screening rule), EXP-015 (multi-ODF fusion superflux+complex — KEEP,
-onset 277 0.7493→0.7615).
+onset 277 0.7493→0.7615, leaderboard 0.75→0.775), EXP-016 (pure-numpy learned
+onset — REJECTED for submission: wins 277-CV but loses on the test-relevant c127
+corpus; code kept as inert asset).
 
 ---
 

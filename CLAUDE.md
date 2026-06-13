@@ -138,8 +138,12 @@ Tempo GT format: `[t_lo, t_hi, w]` where `w` is the annotator weight for
 Scores are from standalone 127-file evaluation scripts (not notebook runs).
 **Onset screening rule (EXP-014):** any onset config change must also be evaluated
 on the `--extra-onsets` 150-file set to screen for train-set overfit. The combined
-277-file onset score (0.7493 at baseline) is the true generalization benchmark.
-Leaderboard onset (0.75) matches the combined-set score, not the train-only 0.8051.
+277-file onset score is the generalization benchmark for *same-distribution* gains.
+**EXP-016 caveat:** when comparing two DIFFERENT onset models (not just a tweak),
+the 277-average can mislead — split it by corpus (c127 vs extra-150). The
+leaderboard onset level tells you which corpus the test resembles: EXP-015's lb
+0.775 sits at the c127 level (0.806), not the 277 level (0.7615), so the test set
+is c127-like. Weight model comparisons toward the c127 subset.
 
 | Metric | Validation (127 files) | Onset (277 files) | Leaderboard (EXP-015) |
 |--------|----------------------|-------------------|----------------------|

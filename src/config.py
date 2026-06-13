@@ -40,6 +40,9 @@ class OnsetConfig:
     merge_tol_ms: float = 15.0  # merge cross-band peaks within this tolerance
     fusion: bool = True       # EXP-015: multi-ODF channel peak-picking + merge
     fusion_odfs: tuple = ("superflux", "complex")  # channels to fuse (hfc/phase rejected)
+    learned: bool = False     # EXP-016: pure-numpy learned onset activation -> picker
+    learned_model_path: str = "models/onset_lr.npz"  # trained LR weights
+    learned_delta: float = 0.18  # peak-pick threshold on the learned activation
 
 
 @dataclass
