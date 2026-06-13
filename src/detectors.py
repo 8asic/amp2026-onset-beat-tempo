@@ -111,10 +111,12 @@ class OnsetDetector:
 
 class BeatTracker:
     """Track beats in audio."""
-    
+
     def __init__(self, cfg=None):
         self.cfg = cfg or config
-    
+        self._beat_model = None             # EXP-018: lazily loaded BLSTM checkpoint
+        self._odf_cache = (None, None)      # (id(y), activation) to avoid recompute
+
     def track(self, y: np.ndarray, sr: int, tempo: Optional[float] = None) -> Tuple[np.ndarray, float]:
         """Beat tracking: tight-window Gaussian DP trellis.
 
@@ -202,7 +204,17 @@ class BeatTracker:
         return beats
 
     def _beat_odf(self, y: np.ndarray, sr: int, hop_length: int) -> np.ndarray:
-        """Log-mel spectral flux: positive first differences of log-mel spectrogram."""
+        """Beat-tracking activation feeding the DP/tempo.
+
+        EXP-018: if config.beat.learned and the BLSTM weights load, return the
+        learned per-frame beat activation; otherwise fall back to log-mel spectral
+        flux. The downstream tempo+DP (and octave-select) are identical either way,
+        so the learned model only upgrades the beat *signal*.
+        """
+        if self.cfg.beat.learned:
+            act = self._blstm_activation(y, sr, hop_length)
+            if act is not None:
+                return act
         mel = librosa.feature.melspectrogram(
             y=y, sr=sr, hop_length=hop_length, n_mels=80,
             fmin=self.cfg.audio.onset_fmin, fmax=self.cfg.audio.onset_fmax,
@@ -213,6 +225,74 @@ class BeatTracker:
         if flux.max() > 0:
             flux /= flux.max()
         return flux
+
+    def _load_beat_model(self):
+        """Lazily load the EXP-018 BLSTM checkpoint (torch optional).
+
+        Returns a dict {model, mu, sd, hop, n_fft, n_mels, fmin, fmax} or None if
+        torch is unavailable or the weights file is missing (then we fall back to
+        log-mel flux). Reconstructs the same BiLSTM architecture used in training.
+        """
+        if self._beat_model is not None:
+            return self._beat_model
+        path = self.cfg.beat.learned_model_path
+        if not Path(path).is_absolute():
+            path = self.cfg.paths.base_dir / path
+        if not Path(path).exists():
+            return None
+        try:
+            import torch
+            import torch.nn as nn
+        except ImportError:
+            return None
+
+        ckpt = torch.load(path, map_location="cpu", weights_only=False)
+
+        class BeatBLSTM(nn.Module):
+            def __init__(self, n_mels, hidden, layers):
+                super().__init__()
+                self.lstm = nn.LSTM(n_mels, hidden, layers, batch_first=True,
+                                    bidirectional=True,
+                                    dropout=0.3 if layers > 1 else 0.0)
+                self.fc = nn.Linear(2 * hidden, 1)
+
+            def forward(self, x):
+                h, _ = self.lstm(x)
+                return self.fc(h).squeeze(-1)
+
+        net = BeatBLSTM(ckpt["n_mels"], ckpt["hidden"], ckpt["layers"])
+        net.load_state_dict(ckpt["state_dict"])
+        net.eval()
+        self._beat_model = {
+            "net": net, "torch": torch,
+            "mu": np.asarray(ckpt["mu"], dtype=np.float64),
+            "sd": np.asarray(ckpt["sd"], dtype=np.float64),
+            "hop": int(ckpt["hop"]), "n_fft": int(ckpt["n_fft"]),
+            "n_mels": int(ckpt["n_mels"]),
+            "fmin": float(ckpt["fmin"]), "fmax": float(ckpt["fmax"]),
+        }
+        return self._beat_model
+
+    def _blstm_activation(self, y: np.ndarray, sr: int, hop_length: int):
+        """Per-frame beat activation from the BLSTM; None if model unavailable."""
+        key = id(y)
+        if self._odf_cache[0] == key:
+            return self._odf_cache[1]
+        m = self._load_beat_model()
+        if m is None:
+            return None
+        mel = librosa.feature.melspectrogram(
+            y=y, sr=sr, n_fft=m["n_fft"], hop_length=m["hop"], n_mels=m["n_mels"],
+            fmin=m["fmin"], fmax=m["fmax"],
+        )
+        log_mel = np.log1p(mel).T                       # (T, n_mels)
+        feat = (log_mel - m["mu"]) / m["sd"]
+        torch = m["torch"]
+        with torch.no_grad():
+            t = torch.from_numpy(feat.astype(np.float32)).unsqueeze(0)
+            act = torch.sigmoid(m["net"](t)).squeeze(0).numpy().astype(np.float64)
+        self._odf_cache = (key, act)
+        return act
 
     def _estimate_tempo_from_env(self, onset_env: np.ndarray, fps: float) -> float:
         """Autocorrelation tempo estimation (L05 slide 23)."""
@@ -376,8 +456,13 @@ class Pipeline:
         # Detect onsets
         onsets = self.onset_detector.detect(y, sr)
 
-        # Track beats using estimated tempo
-        if self.cfg.beat.beat_octave_select:
+        # Track beats. EXP-018 decode "A": derive tempo from the beat activation
+        # itself (autocorrelation) and skip octave-select — the activation already
+        # encodes period. Decode "B" (default) keeps comb_fusion tempo + octave-
+        # select and just swaps the beat ODF for the learned activation.
+        if self.cfg.beat.learned and self.cfg.beat.learned_decode == "A":
+            beats, _ = self.beat_tracker.track(y, sr, tempo=None)
+        elif self.cfg.beat.beat_octave_select:
             beats = self._track_best_octave(y, sr, beat_tempo)
         else:
             beats, _ = self.beat_tracker.track(y, sr, tempo=beat_tempo)

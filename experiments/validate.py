@@ -78,6 +78,8 @@ def main():
     ap.add_argument("--fusion-odfs", default=None, help="comma-list of ODF channels: superflux,complex,hfc,phase")
     ap.add_argument("--learned", action="store_true", help="EXP-016: learned onset activation (NOTE: on 277 this is train-on-train, optimistic; honest number is CV)")
     ap.add_argument("--learned-delta", type=float, default=None, help="peak-pick delta on learned activation")
+    ap.add_argument("--learned-beat", action="store_true", help="EXP-018: BLSTM beat activation (needs torch + models/beat_blstm.pt)")
+    ap.add_argument("--beat-decode", default=None, choices=["A", "B"], help="EXP-018 decode: B=comb_fusion+octave (default), A=autocorr-on-activation")
     args = ap.parse_args()
 
     if args.tempo_method is not None:
@@ -110,6 +112,10 @@ def main():
         config.onset.learned = True
     if args.learned_delta is not None:
         config.onset.learned_delta = args.learned_delta
+    if args.learned_beat:
+        config.beat.learned = True
+    if args.beat_decode is not None:
+        config.beat.learned_decode = args.beat_decode
     if args.hpss:
         config.audio.hpss = True
     if args.hpss_kern_harm is not None:
