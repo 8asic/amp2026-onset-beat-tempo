@@ -999,13 +999,13 @@ if we want to bank the small onset upside on a spare leaderboard slot. Fusion
 
 ---
 
-## EXP-018 — Beat BLSTM (PyTorch / Colab) — IN PROGRESS
+## EXP-018 — Beat BLSTM (PyTorch / Colab) — KEEP (SHIPPED)
 
 | Field | Value |
 |-------|-------|
 | **Experiment ID** | EXP-018 |
 | **Date** | 2026-06-12 |
-| **Status** | IN PROGRESS — notebook built; training in Colab; src integration pending review |
+| **Status** | KEEP — SHIPPED. Fair c127 beat 0.7335 vs production 0.7215 (+0.0120). config.beat.learned=True, decode B. |
 
 ### Decision to use PyTorch (rules note)
 User explicitly approved PyTorch for a **self-trained** model (not on the original
@@ -1026,8 +1026,49 @@ stays our own code. This is the user's rules-interpretation call.
   fall back to the autocorrelation tracker — **pending explicit user confirmation
   before writing**.
 
-### Next
-User runs the notebook in Colab; then confirm + wire `BeatTracker`.
+### Results — fair c127 evaluation (the decisive test)
+The notebook val (mixed, extra-heavy) gave big deltas over a WEAK autocorr
+baseline (+0.12–0.16), but that is not our production beat. The honest test:
+train on the 696 extra files ONLY (zero c127), evaluate on all 127 c127 with the
+SHIP decode (B = comb_fusion tempo + octave-select over the BLSTM activation),
+compare to production 0.7215.
+
+| beat method (127, model never trained on them) | Beat F1 |
+|-----------------------------------------------|---------|
+| production (log-mel flux + comb_fusion + octave) | 0.7215 |
+| BLSTM under-trained (noisy), decode B | 0.7251 (+0.004, wash) |
+| **BLSTM stabilized, decode B** | **0.7335 (+0.0120)** |
+| BLSTM stabilized, decode A | ~0.70 (worse — A drops comb_fusion+octave) |
+
+Decode A (autocorr on the activation) is consistently worse than B — the win
+comes from swapping the beat ODF (flux → BLSTM activation) inside our existing
+comb_fusion-tempo + octave-select framework. Stabilizing training (grad-clip 3.0,
+ReduceLROnPlateau, early-stop) turned the +0.004 wash into a genuine +0.012 fair
+gain. 0.7335 is a conservative FLOOR for the ship model (trained on zero c127);
+the shipped all-823 model trains on c127-distribution data, so test-50 should be
+≥ this. Optimistic all-823 on its own 127: 0.7631.
+
+### What worked / lessons
+- The BLSTM is a much better beat *signal* than log-mel flux, but only decode B
+  (keeping our strong comb_fusion tempo + octave-select) realises it on c127.
+- Under-training masked the gain — the noisy val loss was the tell. Stabilisation
+  was necessary to clear the production bar.
+- Same corpus lesson as EXP-016/019: notebook deltas on the extra corpus (+0.15)
+  vastly overstate the c127 gain (+0.012). Always confirm on the c127 corpus.
+
+### Decision
+KEEP — SHIPPED. `config.beat.learned=True` (decode B), `models/beat_blstm.pt`
+committed (all-823 stabilised model). Onset/tempo untouched. Inference needs
+torch (falls back to log-mel flux if torch/weights absent). Validation mean
+(127, optimistic beat) 0.7795; honest fair beat 0.7335.
+
+### Leaderboard
+Pending: regenerate submission via `01_pipeline.ipynb` and upload. Expected beat
+0.725 → ~0.74. *(record result here when it lands.)*
+
+### Notebook artifacts
+`notebooks/02_beat_model.ipynb` (TRAIN_ON_EXTRA_ONLY toggle: True=fair test →
+`beat_blstm_extra.pt`; False=ship → `beat_blstm.pt`). Stabilised training cell.
 
 ---
 

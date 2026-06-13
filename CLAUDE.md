@@ -145,21 +145,26 @@ leaderboard onset level tells you which corpus the test resembles: EXP-015's lb
 0.775 sits at the c127 level (0.806), not the 277 level (0.7615), so the test set
 is c127-like. Weight model comparisons toward the c127 subset.
 
-| Metric | Validation (127 files) | Onset (277 files) | Leaderboard (EXP-015) |
-|--------|----------------------|-------------------|----------------------|
-| Onset F1 | **0.8055** (EXP-015) | **0.7615** (EXP-015) | **0.775** |
-| Beat F1 | **0.7215** (EXP-012) | — | 0.725 |
+| Metric | Validation (127 files) | Generalization | Leaderboard |
+|--------|----------------------|----------------|-------------|
+| Onset F1 | **0.8055** (EXP-015) | 0.7615 (277-file) | **0.775** (EXP-015) |
+| Beat F1 | 0.7631 opt / **0.7335 fair** (EXP-018) | 0.7335 (fair c127) | 0.725 (pre-EXP-018) |
 | Tempo p-score | **0.7698** (EXP-008) | — | **0.86** |
-| Mean | **0.7656** (EXP-015) | — | **~0.787** |
+| Mean | **0.7795** (EXP-018, opt beat) | — | **~0.787** (pre-EXP-018) |
 
-The 277-file onset score is the generalization benchmark (a conservative lower
-bound for the leaderboard); the 127-file onset is an over-optimistic outlier
-(see EXP-014/015). EXP-015 leaderboard onset (0.775) beat the 277-proxy (0.7615).
+Generalization benchmarks (not the 127-train, which is over-optimistic):
+- **Onset**: 277-file score (127 train + 150 extra) tracks the leaderboard.
+- **Beat (EXP-018)**: the BLSTM beat is judged by the FAIR c127 test — train on
+  696 extra only, eval on 127 c127 (decode B): **0.7335 vs flux 0.7215**. The
+  127-train beat (0.7631) is optimistic (model trained on those files).
+EXP-018 ships a learned PyTorch BLSTM beat activation (config.beat.learned=True);
+inference needs torch + models/beat_blstm.pt, else falls back to log-mel flux.
 
 Progression: EXP-007 Mean=0.7325 → EXP-008 (comb_fusion tempo) 0.7568 →
 EXP-010 (multiband onset) 0.7593 → EXP-011 (whitening) 0.7629 →
 EXP-012 (beat octave-select) 0.7655 → EXP-015 (multi-ODF fusion, onset 277:
-0.7493→0.7615) 0.7656/lb~0.782.
+0.7493→0.7615) 0.7656/lb~0.782 → EXP-018 (learned BLSTM beat, fair c127
+0.7215→0.7335).
 EXP-015 config: onset fusion=True, fusion_odfs=("superflux","complex"),
 threshold=0.055, n_bands=2, merge_tol_ms=15, superflux_gamma=200, superflux_mu=3,
 whiten=True (decay=0.995, floor=0.10), dp_transition_width=0.10,
