@@ -23,6 +23,9 @@ build/
 # Submissions
 submissions/
 
+# Models
+models/
+
 # Experiment harness cache (decoded audio + precomputed features)
 experiments/.cache/
 experiments/.cache_feat/
