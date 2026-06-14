@@ -1308,4 +1308,43 @@ beat-derived tempo (tempo is closest to top-3).
 
 ---
 
+## EXP-025 - Tempo ensemble (comb_fusion + beat-activation AC) - MARGINAL
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-025 |
+| **Date** | 2026-06-14 |
+| **Status** | Marginal (+0.005, within noise); not shipped |
+
+### Method
+Diagnostic (experiments/tempo_diag.py): combine comb_fusion primary with the
+BLSTM beat-activation autocorrelation tempo. Swept agreement threshold x
+disagreement handling.
+
+### Result (127, tempo p-score; comb_fusion baseline 0.7698)
+| strategy | p-score |
+|----------|---------|
+| comb_fusion (current) | 0.7698 |
+| beat-AC alone | 0.7306 |
+| two independent estimates | 0.6868 |
+| agree->cf-pair, disagree->both primaries (thr 0.08) | 0.7749 (+0.005) |
+| disagree->beat-AC octave pair | 0.71-0.73 (worse) |
+
+Best = +0.005, within 127-file noise. Beat-AC is unreliable as a primary; the
+only gain is covering octave-disagreement cases.
+
+### Conclusion - METHOD CEILING REACHED (all three metrics)
+- Onset: augmentation + multi-resolution CNN -> plateaued 0.807 (EXP-022/023)
+- Beat: augmentation + DBN decoder -> plateaued 0.735 (EXP-021/024)
+- Tempo: ensembles -> +0.005 within noise (EXP-025)
+Top-3 in all three is NOT reachable with the methods found. Final leaderboard:
+onset 0.807 (14th), beat 0.735 (7th), tempo 0.86 (6th), mean ~0.8007. Progression
+from EXP-000 0.38 -> EXP-007 0.7325 -> ... -> EXP-020 ~0.8007. Three shipped
+learned/fused wins (onset fusion+CNN, beat BLSTM, tempo comb_fusion).
+
+### Decision
+Not shipped (within noise). Recommend consolidation. tempo_diag.py kept.
+
+---
+
 <!-- Add new entries below this line -->
