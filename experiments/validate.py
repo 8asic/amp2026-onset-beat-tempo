@@ -81,6 +81,9 @@ def main():
     ap.add_argument("--learned-beat", action="store_true", help="EXP-018: BLSTM beat activation (needs torch + models/beat_blstm.pt)")
     ap.add_argument("--beat-decode", default=None, choices=["A", "B"], help="EXP-018 decode: B=comb_fusion+octave (default), A=autocorr-on-activation")
     ap.add_argument("--beat-model", default=None, help="EXP-018 override beat model path (e.g. models/beat_blstm_extra.pt for the fair test)")
+    ap.add_argument("--beat-decoder", default=None, choices=["dp", "dbn"], help="EXP-024 beat decoder: dp (default) | dbn (joint tempo+phase)")
+    ap.add_argument("--dbn-lam-change", type=float, default=None, help="DBN tempo-drift penalty")
+    ap.add_argument("--dbn-lam-prior", type=float, default=None, help="DBN comb_fusion-prior anchor")
     ap.add_argument("--no-onset-cnn", action="store_true", help="EXP-020: disable onset CNN (use fusion onset)")
     ap.add_argument("--cnn-model", default=None, help="EXP-020 override onset CNN path (e.g. models/onset_cnn_extra.pt)")
     ap.add_argument("--cnn-delta", type=float, default=None, help="EXP-020 peak-pick delta on the CNN activation")
@@ -120,6 +123,12 @@ def main():
         config.beat.learned = True
     if args.beat_decode is not None:
         config.beat.learned_decode = args.beat_decode
+    if args.beat_decoder is not None:
+        config.beat.decoder = args.beat_decoder
+    if args.dbn_lam_change is not None:
+        config.beat.dbn_lam_change = args.dbn_lam_change
+    if args.dbn_lam_prior is not None:
+        config.beat.dbn_lam_prior = args.dbn_lam_prior
     if args.beat_model is not None:
         config.beat.learned_model_path = args.beat_model
     if args.no_onset_cnn:

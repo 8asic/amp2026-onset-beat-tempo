@@ -1262,4 +1262,50 @@ onset ensemble as a leaderboard gamble.
 
 ---
 
+## EXP-024 - DBN beat decoder (joint tempo+phase) - WASH (not shipped)
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-024 |
+| **Date** | 2026-06-14 |
+| **Status** | NOT shipped - loses to DP+comb_fusion+octave-select |
+
+### Method
+From-scratch variable-lag Viterbi DBN (state = beat at frame t with incoming
+lag; tempo may drift, penalised by lam_change; anchored to comb_fusion tempo
+prior via lam_prior). Vectorised O(N.L^2). Tested on the shipped beat activation
+(127, optimistic), vs DP decode-B 0.7631.
+
+### Result (127, shipped beat model)
+| decoder | Beat F1 |
+|---------|---------|
+| DP decode-B (comb_fusion + octave-select) | 0.7631 |
+| DBN default (lam_change 6, lam_prior 4) | 0.7501 |
+| DBN lam_prior16/lam_change24 | 0.6989 |
+| DBN 16/60 | 0.6773 |
+| DBN 40/24 | 0.6507 |
+| DBN 40/60 | 0.6399 |
+
+Every DBN config loses to DP; stronger anchoring/rigidity makes it WORSE.
+
+### Why DP wins
+Our DP decoder already pairs the strong comb_fusion global tempo with a tight
+Gaussian phase window AND octave-select (EXP-012, +0.008). The DBN's tempo-drift
+flexibility doesn't help (most files are steady-tempo) and it LACKS octave-select,
+so it anchors to comb_fusion's raw octave on slow files. Net regression.
+
+### Decision
+NOT shipped. Beat stays EXP-018 (lb 0.735), decoder="dp". DBN code kept as inert
+asset (config.beat.decoder).
+
+### Big-picture conclusion
+Big levers now exhausted: onset (augmentation, multi-resolution CNN) and beat
+(augmentation, DBN decoder) ALL wash against the tuned DSP + small-NN pipeline.
+We are at a method ceiling: mean ~0.80, onset 0.807/14th, beat 0.735/7th, tempo
+0.86/6th. Top-3 in all three is not reachable with the methods found. Remaining
+levers are incremental: onset ensemble (CNN+fusion, leaderboard gamble), learned/
+beat-derived tempo (tempo is closest to top-3).
+
+---
+
 <!-- Add new entries below this line -->

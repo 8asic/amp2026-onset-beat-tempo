@@ -294,6 +294,81 @@ class BeatTracker:
         beats.sort()
         return beats
 
+    def _dbn_beats(self, onset_env: np.ndarray, fps: float, tempo_prior: float) -> list:
+        """Joint tempo+phase beat decoder (simplified DBN / variable-lag Viterbi).
+
+        State = "a beat at frame t whose incoming inter-beat interval is lag".
+        Unlike the fixed-lag DP, the lag may DRIFT frame-to-frame (penalised by
+        dbn_lam_change), so it tracks tempo changes/rubato; it is also anchored to
+        the comb_fusion tempo_prior (dbn_lam_prior) to keep the strong global
+        tempo. Vectorised O(N·L²) Viterbi over (frame, lag). Our own code — no
+        librosa.beat, no madmom.
+        """
+        N = len(onset_env)
+        a = onset_env.astype(np.float64)
+        lag_min = max(2, int(np.ceil(60.0 / self.cfg.beat.tempo_max * fps)))
+        lag_max = int(np.floor(60.0 / self.cfg.beat.tempo_min * fps))
+        lag_max = min(lag_max, N - 1)
+        if lag_max <= lag_min:
+            return list(range(0, N, max(1, lag_min)))
+        lags = np.arange(lag_min, lag_max + 1)
+        L = len(lags)
+
+        lam_ch = self.cfg.beat.dbn_lam_change
+        sig_ch = self.cfg.beat.dbn_sigma_change * float(lags.mean()) + 1e-9
+        Lk = lags.reshape(-1, 1).astype(np.float64)
+        Lj = lags.reshape(1, -1).astype(np.float64)
+        Tc = -lam_ch * ((Lj - Lk) / sig_ch) ** 2          # (L,L): Tc[k,j] from lag k -> j
+        TcT = Tc.T.copy()                                 # (L,L): [j,k]
+
+        pr = np.zeros(L)
+        if tempo_prior and tempo_prior > 0:
+            lag_prior = 60.0 * fps / tempo_prior
+            sig_pr = self.cfg.beat.dbn_sigma_prior * lag_prior + 1e-9
+            pr = -self.cfg.beat.dbn_lam_prior * ((lags - lag_prior) / sig_pr) ** 2
+
+        NEG = -1e18
+        score = np.full((N, L), NEG)
+        back = np.full((N, L), -1, dtype=int)
+        for t in range(0, min(lag_min, N)):               # earliest beats: no predecessor
+            score[t] = a[t] + pr
+
+        for t in range(lag_min, N):
+            idx = t - lags                                # (L,) predecessor frame per target lag j
+            prev = np.full((L, L), NEG)
+            ok = idx >= 0
+            if ok.any():
+                prev[ok] = score[idx[ok]]                 # prev[j] = score[t-lags[j]]
+            cand = prev + TcT                             # cand[j,k]
+            k = cand.argmax(axis=1)
+            mx = cand[np.arange(L), k]
+            score[t] = a[t] + pr + mx
+            back[t] = k
+            if t < lag_max:                               # also allow starting here
+                start = a[t] + pr
+                better = start > score[t]
+                score[t][better] = start[better]
+                back[t][better] = -1
+
+        lo = max(0, N - lag_max)                          # last beat near the end
+        best, bt, bj = NEG, N - 1, 0
+        for t in range(lo, N):
+            j = int(np.argmax(score[t]))
+            if score[t, j] > best:
+                best, bt, bj = score[t, j], t, j
+
+        beats: list[int] = []
+        t, j = bt, bj
+        while t >= 0 and j >= 0:
+            beats.append(t)
+            k = back[t, j]
+            if k < 0:
+                break
+            t = t - lags[j]
+            j = k
+        beats.sort()
+        return beats
+
     def _beat_odf(self, y: np.ndarray, sr: int, hop_length: int) -> np.ndarray:
         """Beat-tracking activation feeding the DP/tempo.
 
@@ -551,7 +626,16 @@ class Pipeline:
         # itself (autocorrelation) and skip octave-select — the activation already
         # encodes period. Decode "B" (default) keeps comb_fusion tempo + octave-
         # select and just swaps the beat ODF for the learned activation.
-        if self.cfg.beat.learned and self.cfg.beat.learned_decode == "A":
+        if self.cfg.beat.decoder == "dbn":
+            # EXP-024: joint tempo+phase DBN decode over the beat activation,
+            # anchored to the comb_fusion tempo prior.
+            hop = self.cfg.audio.beat_hop_length
+            env = self.beat_tracker._beat_odf(y, sr, hop)
+            fps = sr / hop
+            frames = self.beat_tracker._dbn_beats(env, fps, beat_tempo)
+            beats = librosa.frames_to_time(np.array(frames, dtype=int), sr=sr,
+                                           hop_length=hop)
+        elif self.cfg.beat.learned and self.cfg.beat.learned_decode == "A":
             beats, _ = self.beat_tracker.track(y, sr, tempo=None)
         elif self.cfg.beat.beat_octave_select:
             beats = self._track_best_octave(y, sr, beat_tempo)

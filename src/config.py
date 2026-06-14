@@ -66,6 +66,11 @@ class BeatConfig:
     learned: bool = True               # EXP-018 SHIPPED: BLSTM beat activation -> tempo+DP (fair c127 0.7335 vs flux 0.7215); needs torch+weights, else falls back to log-mel flux
     learned_model_path: str = "models/beat_blstm.pt"  # PyTorch BLSTM weights (Colab-trained)
     learned_decode: str = "B"          # "B": comb_fusion tempo + octave-select (default); "A": _estimate_tempo_from_env
+    decoder: str = "dp"                # EXP-024: "dp" (windowed DP) | "dbn" (joint tempo+phase Viterbi)
+    dbn_lam_change: float = 6.0        # tempo-drift penalty (higher = steadier)
+    dbn_sigma_change: float = 0.10     # drift scale, fraction of mean lag
+    dbn_lam_prior: float = 4.0         # anchor to comb_fusion tempo prior
+    dbn_sigma_prior: float = 0.15      # prior width, fraction of prior lag
 
 
 @dataclass
