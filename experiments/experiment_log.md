@@ -1141,4 +1141,43 @@ Standings: onset 14th (top 0.881), beat 7th (top 0.861), tempo 6th (top 0.91).
 
 ---
 
+## EXP-021 - Beat tempo-augmentation - WASH for decode B (not shipped)
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-021 |
+| **Date** | 2026-06-14 |
+| **Status** | NOT shipped - wash for decode B; clean negative from fair test |
+
+### Method
+Train-only time-stretch augmentation (rates 0.84-1.19, ~5x; beat times scaled
+1/rate) on the beat BLSTM (architecture unchanged, to isolate augmentation).
+
+### Result (fair test: train 696-extra augmented, eval 127 c127)
+| metric | non-aug | augmented |
+|--------|---------|-----------|
+| decode A (model autocorr tempo) | 0.7007 | 0.7200 (+0.019) |
+| decode B (comb_fusion tempo + octave) | 0.7335 | 0.7315 (wash) |
+| val loss (best) | 0.5358 | 0.4852 (better fit) |
+
+### Why augmentation helps decode A but NOT decode B
+Decode B takes tempo from comb_fusion (already strong, lb 0.86); the activation
+only needs to mark beat PHASE. Tempo-augmentation teaches tempo-invariance, which
+decode B does not need and which does not improve phase, so its benefit is
+bypassed. It helps decode A (model supplies own tempo), but decode A base (0.72)
+is below decode B (0.7335).
+
+### Implication
+For the decode-B beat pipeline the lever is activation/PHASE quality
+(architecture: CRNN/TCN, or a DBN decoder), NOT tempo-augmentation. Beat -> top-3
+needs +0.10 (0.735 -> ~0.83), the hardest metric. Pivot: onset augmentation is
+higher-EV (onset is data-limited AND its picker uses the activation directly, so
+augmentation is NOT bypassed the way comb_fusion bypasses it for beat).
+
+### Decision
+NOT shipped. Beat stays at EXP-018 (lb 0.735). Augmentation kept in the notebook
+(RATES) for a possible CRNN follow-up.
+
+---
+
 <!-- Add new entries below this line -->
