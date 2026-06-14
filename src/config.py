@@ -56,6 +56,7 @@ class BeatConfig:
     tempo_search_min: float = 60.0    # AC search floor; avoids measure-level false peaks
     tempo_method: str = "comb_fusion"  # "argmax" | "comb" | "comb_fusion" (EXP-008)
     tempo_comb_harmonics: int = 2     # # integer harmonics summed in comb salience
+    tempo_ensemble: bool = False      # EXP-025: on tempo disagreement, offer comb_fusion + beat-AC primaries
     dp_alpha: float = 100.0          # Ellis DP tightness (kept for reference)
     dp_transition_width: float = 0.10  # tight window: ±fraction of beat period
     dp_transition_lambda: float = 1.0  # Gaussian penalty strength

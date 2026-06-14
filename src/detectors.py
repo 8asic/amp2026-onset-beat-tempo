@@ -142,8 +142,9 @@ class OnsetDetector:
 
         ckpt = torch.load(path, map_location="cpu", weights_only=False)
         sd = ckpt["state_dict"]
-        # Infer conv channels + head width from the checkpoint so this loads
-        # whatever architecture was trained (small 16/32/32 or larger variants).
+        # Infer conv channels, INPUT channels (1=single-res, 3=multi-res EXP-023),
+        # and head width from the checkpoint -> loads any trained variant.
+        in_ch = sd["conv.0.weight"].shape[1]
         c1 = sd["conv.0.weight"].shape[0]
         c2 = sd["conv.4.weight"].shape[0]
         c3 = sd["conv.8.weight"].shape[0]
@@ -153,19 +154,19 @@ class OnsetDetector:
             def __init__(self, n_mels):
                 super().__init__()
                 self.conv = nn.Sequential(
-                    nn.Conv2d(1, c1, (3, 3), padding=(1, 1)), nn.BatchNorm2d(c1), nn.ReLU(),
+                    nn.Conv2d(in_ch, c1, (3, 3), padding=(1, 1)), nn.BatchNorm2d(c1), nn.ReLU(),
                     nn.MaxPool2d((1, 3)),
                     nn.Conv2d(c1, c2, (3, 3), padding=(1, 1)), nn.BatchNorm2d(c2), nn.ReLU(),
                     nn.MaxPool2d((1, 3)),
                     nn.Conv2d(c2, c3, (3, 3), padding=(1, 1)), nn.BatchNorm2d(c3), nn.ReLU(),
                 )
                 with torch.no_grad():
-                    f = self.conv(torch.zeros(1, 1, 8, n_mels)).shape[-1]
+                    f = self.conv(torch.zeros(1, in_ch, 8, n_mels)).shape[-1]
                 self.head = nn.Sequential(
                     nn.Linear(c3 * f, hidden), nn.ReLU(), nn.Dropout(0.3), nn.Linear(hidden, 1))
 
-            def forward(self, x):
-                h = self.conv(x.unsqueeze(1))
+            def forward(self, x):                 # x: (B, in_ch, T, n_mels)
+                h = self.conv(x)
                 B, C, T, F = h.shape
                 h = h.permute(0, 2, 1, 3).reshape(B, T, C * F)
                 return self.head(h).squeeze(-1)
@@ -173,29 +174,41 @@ class OnsetDetector:
         net = OnsetCNN(int(ckpt["n_mels"]))
         net.load_state_dict(sd)
         net.eval()
+        n_ffts = ckpt.get("n_ffts")
+        if n_ffts is None:
+            n_ffts = [int(ckpt["n_fft"])]
         self._onset_cnn = {
-            "net": net, "torch": torch,
+            "net": net, "torch": torch, "in_ch": int(in_ch),
             "mu": np.asarray(ckpt["mu"], dtype=np.float64),
             "sd": np.asarray(ckpt["sd"], dtype=np.float64),
             "n_mels": int(ckpt["n_mels"]), "hop": int(ckpt["hop"]),
-            "n_fft": int(ckpt["n_fft"]),
+            "n_ffts": [int(n) for n in n_ffts],
             "fmin": float(ckpt["fmin"]), "fmax": float(ckpt["fmax"]),
         }
         return self._onset_cnn
 
     def _onset_cnn_activation(self, y: np.ndarray, sr: int):
-        """Per-frame onset activation from the CNN; None if model unavailable."""
+        """Per-frame onset activation from the CNN; None if model unavailable.
+
+        Handles single-res (1 n_fft) and multi-res (EXP-023: 3 STFT windows
+        stacked as input channels). Input built as (in_ch, T, n_mels).
+        """
         m = self._load_onset_cnn()
         if m is None:
             return None
-        mel = librosa.feature.melspectrogram(
-            y=y, sr=sr, n_fft=m["n_fft"], hop_length=m["hop"], n_mels=m["n_mels"],
-            fmin=m["fmin"], fmax=m["fmax"],
-        )
-        feat = (np.log1p(mel).T - m["mu"]) / m["sd"]      # (T, n_mels)
+        specs = []
+        for nfft in m["n_ffts"]:
+            mel = librosa.feature.melspectrogram(
+                y=y, sr=sr, n_fft=nfft, hop_length=m["hop"], n_mels=m["n_mels"],
+                fmin=m["fmin"], fmax=m["fmax"],
+            )
+            specs.append(np.log1p(mel).T)             # (T, n_mels)
+        T = min(s.shape[0] for s in specs)
+        feat = np.stack([s[:T] for s in specs], axis=0)   # (in_ch, T, n_mels)
+        feat = (feat - m["mu"]) / m["sd"]                 # mu/sd broadcast (single or multi)
         torch = m["torch"]
         with torch.no_grad():
-            t = torch.from_numpy(feat.astype(np.float32)).unsqueeze(0)
+            t = torch.from_numpy(feat.astype(np.float32)).unsqueeze(0)  # (1, in_ch, T, n_mels)
             act = torch.sigmoid(m["net"](t)).squeeze(0).numpy().astype(np.float64)
         return act
 
@@ -618,6 +631,16 @@ class Pipeline:
         # Use the raw AC primary for beat tracking — avoids sending half-tempo to the DP
         # when primary > 100 BPM (tempos[0] would be primary/2 in that case).
         beat_tempo = self.tempo_estimator._primary
+
+        # EXP-025 tempo ensemble: if comb_fusion and the beat-activation AC tempo
+        # DISAGREE (>8%), offer both primaries as the submission pair (covers
+        # octave/meter errors); if they agree, keep the comb_fusion octave pair.
+        if self.cfg.beat.tempo_ensemble:
+            hop = self.cfg.audio.beat_hop_length
+            env = self.beat_tracker._beat_odf(y, sr, hop)
+            t_beat = self.beat_tracker._estimate_tempo_from_env(env, sr / hop)
+            if abs(beat_tempo - t_beat) / max(beat_tempo, 1e-9) >= 0.08:
+                tempos = sorted([float(beat_tempo), float(t_beat)])
 
         # Detect onsets
         onsets = self.onset_detector.detect(y, sr)
