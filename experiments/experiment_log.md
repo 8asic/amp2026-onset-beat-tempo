@@ -1221,4 +1221,45 @@ levers that do not depend on more data.
 
 ---
 
+## EXP-022b / EXP-023 - Onset aug (ship regime) + multi-resolution CNN - PLATEAU
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-022b, EXP-023 |
+| **Date** | 2026-06-14 |
+| **Status** | Not shipped - within-noise; onset plateaued ~0.80 c127 |
+
+### Results (277-split, c127 IN training, held-out clean c127 = 26 files)
+| model | held-out c127 (26 files) |
+|-------|--------------------------|
+| non-aug single-res (EXP-020) | 0.7922 |
+| + pitch/time augmentation (EXP-022b) | 0.8024 |
+| + multi-resolution 3 STFT (EXP-023) | 0.8010 |
+| fusion DSP (same subset, noisy) | 0.7922-0.8133 across runs |
+
+### Findings
+- EXP-022b CONFIRMED the methodology fix: augmentation helps in the SHIP regime
+  (c127 in training, +0.010) but washed in the extra-only fair test - the fair
+  test undersells in-distribution levers (no c127 in train).
+- EXP-023 multi-resolution CNN: val loss improved (0.464 vs 0.476) but c127 F1
+  flat (0.8010 vs 0.8024) - better fit did NOT translate to peak F1.
+- **The 26-file held-out c127 is too NOISY (+-0.02-0.03) to distinguish ~0.01
+  gains** (fusion baseline alone swings 0.79-0.81 across runs). Offline tuning of
+  small onset gains is unreliable; only the leaderboard or 5-fold CV (5x compute)
+  could resolve them.
+
+### Conclusion
+Onset is PLATEAUED ~0.80 c127 / 0.807 lb. The standard SOTA levers (augmentation,
+multi-resolution) do not clearly beat our EXP-020 ship. The leaders' 0.88 on the
+same data is a method we have not cracked. Reliable remaining onset lever:
+ensembling (CNN + fusion, different errors) - but only leaderboard-testable.
+Pivot: beat has the biggest gap and an UNTRIED big lever (DBN/HMM decoder).
+
+### Decision
+Not shipped (within noise; do not burn slots on noise). Onset stays EXP-020
+(0.807). Next: beat CRNN/TCN + proper DBN decoder (the leaders' likely edge), or
+onset ensemble as a leaderboard gamble.
+
+---
+
 <!-- Add new entries below this line -->
