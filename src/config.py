@@ -8,34 +8,39 @@ from typing import Tuple
 @dataclass
 class AudioConfig:
     """Audio processing parameters."""
-    sample_rate: int = 22050
-    hop_length: int = 512
-    onset_hop_length: int = 512
-    beat_hop_length: int = 512
-    tempo_hop_length: int = 1024
-    onset_fft_size: int = 2048
+
+    # Keep original challenge sampling rate.
+    sample_rate: int = 44100
+
+    # 10 ms hop at 44.1 kHz.
+    hop_length: int = 441
+    onset_hop_length: int = 441
+    beat_hop_length: int = 441
+    tempo_hop_length: int = 441
+
+    # ~23 ms STFT window at 44.1 kHz.
+    onset_fft_size: int = 1024
+
     onset_fmin: float = 30.0
     onset_fmax: float = 17000.0
 
 
 @dataclass
 class OnsetConfig:
-    """Onset detection parameters."""
-    threshold: float = 0.08  # LOWER = more onsets (was 0.3)
-    peak_distance: int = 2   # SMALLER = more peaks (was 3)
+    threshold: float = 0.06
+    peak_distance: int = 2
     smoothing_sigma: float = 1.0
-    method: str = "superflux"  # or "flux"
+    method: str = "log_mel_flux"
     eval_window_ms: float = 50.0
 
 
 @dataclass
 class BeatConfig:
-    """Beat tracking parameters."""
-    tempo_min: float = 30.0   # LOWER to catch slow tempos (was 55)
-    tempo_max: float = 200.0  # (was 215)
+    tempo_min: float = 28.0
+    tempo_max: float = 240.0
     tightness: float = 60.0
     eval_window_ms: float = 70.0
-
+    beat_flux_weights: Tuple[float, float, float] = (0.45, 0.40, 0.15)
 
 @dataclass
 class TempoConfig:
