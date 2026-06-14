@@ -1180,4 +1180,45 @@ NOT shipped. Beat stays at EXP-018 (lb 0.735). Augmentation kept in the notebook
 
 ---
 
+## EXP-022 - Onset pitch/time augmentation - WASH (not shipped)
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-022 |
+| **Date** | 2026-06-14 |
+| **Status** | NOT shipped - slight regression on fair c127 |
+
+### Method
+Train-only pitch-shift (+-2 semitones) + time-stretch (+-11%), 7 variants
+(150 extra -> 1050 seqs), small onset CNN unchanged. The "right" augmentation
+(EXP-020's freq-mask was wrong).
+
+### Result (fair: train 150-extra augmented, eval 127 c127)
+| | fair c127 | val loss |
+|--|-----------|----------|
+| non-aug CNN (EXP-020) | 0.7881 | 0.6422 |
+| pitch/time augmented | 0.7742 | 0.6619 |
+Slight regression; augmented model fits c127 WORSE.
+
+### Why augmentation washes (key lesson, both EXP-021 & EXP-022)
+The fair test measures CROSS-CORPUS generalization (extra -> c127). The gap is a
+DISTRIBUTION difference (instruments/genre/recording), not a pitch/tempo gap.
+Augmentation teaches within-distribution invariance, which does not bridge a
+distribution gap. (Beat aug was also bypassed by comb_fusion tempo.) Net: neither
+bigger models nor augmentation move our fair-c127 - we are data/distribution
+limited.
+
+### Caveat (untested)
+The fair test augments EXTRA only. A ship model augmenting all 277 (incl c127)
+*might* help test-50 by adding invariance on test-distribution-like data - untested
+(would need 277-CV with augmentation, or a leaderboard slot). Low confidence after
+two washes.
+
+### Decision
+NOT shipped. Onset stays at EXP-020 (lb 0.807). Pivot to ENSEMBLING (CNN + fusion
+make different errors) and test-time augmentation - reliable variance-reduction
+levers that do not depend on more data.
+
+---
+
 <!-- Add new entries below this line -->
