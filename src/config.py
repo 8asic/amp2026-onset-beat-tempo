@@ -25,6 +25,7 @@ class AudioConfig:
     hpss: bool = False             # EXP-014: REJECTED — hurts generalization (see log)
     hpss_kernel_harm: int = 127    # median filter length along time axis (harmonic)
     hpss_kernel_perc: int = 17     # median filter length along freq axis (percussive)
+    onset_tta_shifts: tuple = ()   # EXP-028: pitch-shift TTA for onset CNN (e.g. (-2,-1,0,1,2)); avg activations
 
 
 @dataclass

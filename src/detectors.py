@@ -191,11 +191,24 @@ class OnsetDetector:
         """Per-frame onset activation from the CNN; None if model unavailable.
 
         Handles single-res (1 n_fft) and multi-res (EXP-023: 3 STFT windows
-        stacked as input channels). Input built as (in_ch, T, n_mels).
+        stacked as input channels). EXP-028: optional pitch-shift test-time
+        augmentation (config.audio.onset_tta_shifts) averages the activation over
+        pitch-shifted copies (pitch preserves timing, so frames align) — synergises
+        with the pitch-augmented CNN to reduce variance.
         """
         m = self._load_onset_cnn()
         if m is None:
             return None
+        shifts = self.cfg.audio.onset_tta_shifts or (0,)
+        acts = []
+        for sh in shifts:
+            ys = librosa.effects.pitch_shift(y, sr=sr, n_steps=sh) if sh != 0 else y
+            acts.append(self._cnn_forward(ys, sr, m))
+        T = min(len(a) for a in acts)
+        return np.mean([a[:T] for a in acts], axis=0)
+
+    def _cnn_forward(self, y: np.ndarray, sr: int, m) -> np.ndarray:
+        """Single forward pass of the onset CNN on audio y -> activation."""
         specs = []
         for nfft in m["n_ffts"]:
             mel = librosa.feature.melspectrogram(
@@ -205,12 +218,11 @@ class OnsetDetector:
             specs.append(np.log1p(mel).T)             # (T, n_mels)
         T = min(s.shape[0] for s in specs)
         feat = np.stack([s[:T] for s in specs], axis=0)   # (in_ch, T, n_mels)
-        feat = (feat - m["mu"]) / m["sd"]                 # mu/sd broadcast (single or multi)
+        feat = (feat - m["mu"]) / m["sd"]
         torch = m["torch"]
         with torch.no_grad():
-            t = torch.from_numpy(feat.astype(np.float32)).unsqueeze(0)  # (1, in_ch, T, n_mels)
-            act = torch.sigmoid(m["net"](t)).squeeze(0).numpy().astype(np.float64)
-        return act
+            t = torch.from_numpy(feat.astype(np.float32)).unsqueeze(0)
+            return torch.sigmoid(m["net"](t)).squeeze(0).numpy().astype(np.float64)
 
 
 class BeatTracker:

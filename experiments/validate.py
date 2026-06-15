@@ -85,6 +85,7 @@ def main():
     ap.add_argument("--dbn-lam-change", type=float, default=None, help="DBN tempo-drift penalty")
     ap.add_argument("--dbn-lam-prior", type=float, default=None, help="DBN comb_fusion-prior anchor")
     ap.add_argument("--tempo-ensemble", action="store_true", help="EXP-025 tempo ensemble (comb_fusion + beat-AC on disagreement)")
+    ap.add_argument("--onset-tta", action="store_true", help="EXP-028 pitch-shift TTA for onset CNN")
     ap.add_argument("--no-onset-cnn", action="store_true", help="EXP-020: disable onset CNN (use fusion onset)")
     ap.add_argument("--cnn-model", default=None, help="EXP-020 override onset CNN path (e.g. models/onset_cnn_extra.pt)")
     ap.add_argument("--cnn-delta", type=float, default=None, help="EXP-020 peak-pick delta on the CNN activation")
@@ -134,6 +135,8 @@ def main():
         config.beat.learned_model_path = args.beat_model
     if args.tempo_ensemble:
         config.beat.tempo_ensemble = True
+    if args.onset_tta:
+        config.audio.onset_tta_shifts = (-2,-1,0,1,2)
     if args.no_onset_cnn:
         config.onset.cnn = False
     if args.cnn_model is not None:

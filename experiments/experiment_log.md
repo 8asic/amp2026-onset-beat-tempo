@@ -1385,4 +1385,39 @@ clear further lever - beat-aug/DBN washed structurally, onset/tempo near ceiling
 
 ---
 
+## EXP-028 - Onset pitch-shift TTA - REJECTED (hurts onset)
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-028 |
+| **Date** | 2026-06-15 |
+| **Status** | REJECTED - not submitted; TTA blurs onset timing |
+
+### Method
+Test-time augmentation: average the onset-CNN activation over pitch-shifted
+copies (-2..+2 semitones). Hypothesis: model is pitch-augmented -> averaging
+reduces variance.
+
+### Result (127 optimistic, delta 0.25)
+| | onset F1 | onsets/file |
+|--|----------|-------------|
+| no TTA (EXP-027) | 0.8196 | 69.9 |
+| pitch-TTA (+-2) | 0.7906 | 57.5 |
+TTA HURTS by -0.029. librosa pitch_shift (phase vocoder) introduces slight
+timing smear; averaging shifted activations blurs onset peaks -> lower + less
+precise -> fails the tight +-50ms onset window. Density drop (69.9->57.5) is the
+symptom. Lower delta can't fix the underlying blur.
+
+### Decision
+REJECTED. Keep EXP-027 (onset 0.816). TTA capability left inert
+(config.audio.onset_tta_shifts default empty). This was the last held-out lever;
+all are now exhausted.
+
+### FINAL RESULT
+onset 0.816 (13th), beat 0.735 (7th), tempo 0.876 (6th), mean ~0.809. From
+EXP-000 0.38. EXP-027 is the final submission; 1 submission held unused (no
+positive-EV lever remains).
+
+---
+
 <!-- Add new entries below this line -->
