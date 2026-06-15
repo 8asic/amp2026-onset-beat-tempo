@@ -73,6 +73,8 @@ class BeatConfig:
     dbn_sigma_change: float = 0.10     # drift scale, fraction of mean lag
     dbn_lam_prior: float = 4.0         # anchor to comb_fusion tempo prior
     dbn_sigma_prior: float = 0.15      # prior width, fraction of prior lag
+    ibi_tempo: bool = False            # EXP-029: use median IBI from beats as a 3rd tempo oracle
+    onset_blend: float = 0.0           # EXP-029: mix onset CNN activation into beat ODF (0=off, e.g. 0.15)
 
 
 @dataclass

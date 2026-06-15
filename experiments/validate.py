@@ -87,6 +87,8 @@ def main():
     ap.add_argument("--tempo-ensemble", action="store_true", help="EXP-025 tempo ensemble (comb_fusion + beat-AC on disagreement)")
     ap.add_argument("--onset-tta", action="store_true", help="EXP-028 pitch-shift TTA for onset CNN")
     ap.add_argument("--no-onset-cnn", action="store_true", help="EXP-020: disable onset CNN (use fusion onset)")
+    ap.add_argument("--ibi-tempo", action="store_true", help="EXP-029B: IBI-derived tempo as 3rd oracle")
+    ap.add_argument("--onset-blend", type=float, default=None, help="EXP-029C: mix onset CNN act into beat ODF (e.g. 0.15)")
     ap.add_argument("--cnn-model", default=None, help="EXP-020 override onset CNN path (e.g. models/onset_cnn_extra.pt)")
     ap.add_argument("--cnn-delta", type=float, default=None, help="EXP-020 peak-pick delta on the CNN activation")
     args = ap.parse_args()
@@ -143,6 +145,10 @@ def main():
         config.onset.cnn_model_path = args.cnn_model
     if args.cnn_delta is not None:
         config.onset.cnn_delta = args.cnn_delta
+    if args.ibi_tempo:
+        config.beat.ibi_tempo = True
+    if args.onset_blend is not None:
+        config.beat.onset_blend = args.onset_blend
     if args.hpss:
         config.audio.hpss = True
     if args.hpss_kern_harm is not None:

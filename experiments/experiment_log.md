@@ -1420,4 +1420,50 @@ positive-EV lever remains).
 
 ---
 
+## EXP-029 — Onset CNN activation blended into beat ODF
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-029 |
+| **Date** | 2026-06-15 |
+| **Status** | COMPLETED — submitted (beat page only) |
+| **Submission file** | `submissions/EXP-029_20260615_181237_9ac1a24/predictions.json` |
+
+### Method
+At inference time, downsample the onset CNN activation (hop=256) by 2 to match
+beat hop (512), then blend: `beat_odf = (1-a)*blstm_act + a*onset_act`. The
+onset CNN fires precisely at note attacks; mixing it into the beat ODF snaps
+the DP to onset peaks that coincide with beat positions, sharpening phase.
+Config: `config.beat.onset_blend = 0.20`. All else unchanged from EXP-027.
+
+### Offline (alpha sweep, ship model beat_blstm.pt, 127 optimistic)
+| alpha | Beat F1 |
+|-------|---------|
+| 0 (baseline) | 0.7631 |
+| 0.20 | **0.7666 (+0.0035)** |
+
+### Fair test (beat_blstm_extra.pt, never saw c127 — honest LB proxy)
+| config | Beat F1 |
+|--------|---------|
+| alpha=0 | 0.7315 |
+| alpha=0.20 | **0.7456 (+0.0141)** |
+
+### Gaussian labels attempt (FAILED)
+Retrained BLSTM with Gaussian labels (sigma=1.5) but Colab only loaded c127
+(127 files) instead of all 823; BLSTM activation F1 dropped to 0.64. Discarded.
+
+### Leaderboard result (beat page only)
+| metric | EXP-027 | EXP-029 | delta |
+|--------|---------|---------|-------|
+| Beat | 0.735 | **0.733** | -0.002 |
+
+### Decision
+REJECTED. Small regression (-0.002). The fair-test +0.014 gain did not transfer;
+DP path flips on 50 unseen test files likely went the wrong way. EXP-027 is
+the final best result. Gaussian labels with correct 823-file data remains the
+highest unexplored lever for beat.
+
+### FINAL RESULT
+onset 0.816 (13th), beat 0.735 (7th), tempo 0.876 (6th), mean ~0.809.
+
 <!-- Add new entries below this line -->

@@ -18,6 +18,7 @@ class OnsetDetector:
         self.fe = FeatureExtractor(cfg)
         self._learned_model = None  # lazily loaded LearnedOnsetModel (EXP-016)
         self._onset_cnn = None      # lazily loaded EXP-020 PyTorch onset CNN
+        self._cnn_act_cache: Optional[np.ndarray] = None  # EXP-029: last raw activation for beat blending
 
     def detect(self, y: np.ndarray, sr: int) -> np.ndarray:
         """Onset detection: onset-strength path feeds the SAME hand-written picker.
@@ -205,7 +206,9 @@ class OnsetDetector:
             ys = librosa.effects.pitch_shift(y, sr=sr, n_steps=sh) if sh != 0 else y
             acts.append(self._cnn_forward(ys, sr, m))
         T = min(len(a) for a in acts)
-        return np.mean([a[:T] for a in acts], axis=0)
+        result = np.mean([a[:T] for a in acts], axis=0)
+        self._cnn_act_cache = result  # EXP-029: expose for beat blending in Pipeline
+        return result
 
     def _cnn_forward(self, y: np.ndarray, sr: int, m) -> np.ndarray:
         """Single forward pass of the onset CNN on audio y -> activation."""
@@ -233,15 +236,25 @@ class BeatTracker:
         self._beat_model = None             # EXP-018: lazily loaded BLSTM checkpoint
         self._odf_cache = (None, None)      # (id(y), activation) to avoid recompute
 
-    def track(self, y: np.ndarray, sr: int, tempo: Optional[float] = None) -> Tuple[np.ndarray, float]:
+    def track(self, y: np.ndarray, sr: int, tempo: Optional[float] = None,
+              onset_act: Optional[np.ndarray] = None) -> Tuple[np.ndarray, float]:
         """Beat tracking: tight-window Gaussian DP trellis.
 
         Optional second pass (config.beat.beat_two_pass): re-run the DP with the
         lag implied by the realized median inter-beat interval. This self-corrects
         files where the supplied tempo was a few % off the period the beats
         actually settled on.
+
+        onset_act: optional downsampled onset CNN activation (EXP-029) to blend
+        into the beat ODF, sharpening phase precision.
         """
         onset_env = self._beat_odf(y, sr, self.cfg.audio.beat_hop_length)
+        # EXP-029C: mix onset CNN activation into beat ODF for sharper phase snap
+        if onset_act is not None and self.cfg.beat.onset_blend > 0.0:
+            alpha = self.cfg.beat.onset_blend
+            T = min(len(onset_env), len(onset_act))
+            onset_env = onset_env.copy()
+            onset_env[:T] = (1.0 - alpha) * onset_env[:T] + alpha * onset_act[:T]
         fps = sr / self.cfg.audio.beat_hop_length
         N = len(onset_env)
 
@@ -657,6 +670,15 @@ class Pipeline:
         # Detect onsets
         onsets = self.onset_detector.detect(y, sr)
 
+        # EXP-029C: extract downsampled onset CNN activation for beat ODF blending.
+        # onset hop=256, beat hop=512 → downsample by 2 via pair-averaging.
+        _onset_act_ds: Optional[np.ndarray] = None
+        if self.cfg.beat.onset_blend > 0.0:
+            raw = self.onset_detector._cnn_act_cache
+            if raw is not None and len(raw) >= 2:
+                n = (len(raw) // 2) * 2
+                _onset_act_ds = (raw[:n:2] + raw[1:n:2]) / 2.0
+
         # Track beats. EXP-018 decode "A": derive tempo from the beat activation
         # itself (autocorrelation) and skip octave-select — the activation already
         # encodes period. Decode "B" (default) keeps comb_fusion tempo + octave-
@@ -671,15 +693,36 @@ class Pipeline:
             beats = librosa.frames_to_time(np.array(frames, dtype=int), sr=sr,
                                            hop_length=hop)
         elif self.cfg.beat.learned and self.cfg.beat.learned_decode == "A":
-            beats, _ = self.beat_tracker.track(y, sr, tempo=None)
+            beats, _ = self.beat_tracker.track(y, sr, tempo=None, onset_act=_onset_act_ds)
         elif self.cfg.beat.beat_octave_select:
-            beats = self._track_best_octave(y, sr, beat_tempo)
+            beats = self._track_best_octave(y, sr, beat_tempo, onset_act=_onset_act_ds)
         else:
-            beats, _ = self.beat_tracker.track(y, sr, tempo=beat_tempo)
+            beats, _ = self.beat_tracker.track(y, sr, tempo=beat_tempo, onset_act=_onset_act_ds)
+
+        # EXP-029B: IBI-derived tempo as a third oracle.
+        # After we have the final beat grid, compute median IBI → BPM. If it
+        # disagrees with ALL current estimates (>8%), replace/extend the pair.
+        if self.cfg.beat.ibi_tempo and len(beats) >= 6:
+            ibis = np.diff(beats)
+            med = float(np.median(ibis))
+            # Outlier filter: keep IBIs within [0.4, 2.5] × median
+            clean = ibis[(ibis > 0.4 * med) & (ibis < 2.5 * med)]
+            if len(clean) >= 4:
+                ibi_bpm = 60.0 / float(np.median(clean))
+                # Octave-normalise into plausible tempo range
+                while ibi_bpm < 60.0:
+                    ibi_bpm *= 2.0
+                while ibi_bpm > 200.0:
+                    ibi_bpm /= 2.0
+                agrees = any(abs(ibi_bpm - t) / max(t, 1e-9) < 0.08 for t in tempos)
+                if not agrees:
+                    # IBI oracle sees something comb_fusion missed — offer both
+                    tempos = sorted([float(tempos[0]), float(ibi_bpm)])
 
         return onsets, beats, tempos
 
-    def _track_best_octave(self, y: np.ndarray, sr: int, base_bpm: float) -> np.ndarray:
+    def _track_best_octave(self, y: np.ndarray, sr: int, base_bpm: float,
+                           onset_act: Optional[np.ndarray] = None) -> np.ndarray:
         """Track beats at {base/2, base, base*2} and keep the grid whose beats sit
         on onset peaks far above the off-beat midpoints. A half-tempo grid skips
         real beats, so its midpoints land on onsets and contrast collapses; a
@@ -693,7 +736,7 @@ class Pipeline:
         # Only very slow primaries are prone to the half-beat pathology; leave
         # plausible-beat tempos untouched (selecting an octave there regresses).
         if base_bpm >= self.cfg.beat.beat_octave_gate:
-            beats, _ = self.beat_tracker.track(y, sr, tempo=base_bpm)
+            beats, _ = self.beat_tracker.track(y, sr, tempo=base_bpm, onset_act=onset_act)
             return beats
 
         cands = []
@@ -706,7 +749,7 @@ class Pipeline:
 
         best_beats, best_score = None, -np.inf
         for bpm in cands:
-            beats, _ = self.beat_tracker.track(y, sr, tempo=bpm)
+            beats, _ = self.beat_tracker.track(y, sr, tempo=bpm, onset_act=onset_act)
             frames = np.round(np.asarray(beats) * fps).astype(int)
             frames = frames[(frames >= 0) & (frames < len(odf))]
             if len(frames) < 2:
@@ -718,5 +761,5 @@ class Pipeline:
             if score > best_score:
                 best_beats, best_score = beats, score
         if best_beats is None:
-            best_beats, _ = self.beat_tracker.track(y, sr, tempo=base_bpm)
+            best_beats, _ = self.beat_tracker.track(y, sr, tempo=base_bpm, onset_act=onset_act)
         return best_beats
