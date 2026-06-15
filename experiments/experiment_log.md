@@ -1347,4 +1347,42 @@ Not shipped (within noise). Recommend consolidation. tempo_diag.py kept.
 
 ---
 
+## EXP-027 - Hail-mary (best-of-best) - SHIPPED, BOTH BETS LANDED
+
+| Field | Value |
+|-------|-------|
+| **Experiment ID** | EXP-027 |
+| **Date** | 2026-06-15 |
+| **Status** | SHIPPED - onset +0.009, tempo +0.016; kept (nothing reverted) |
+
+### Submission
+onset = multi-res CNN (3 STFT windows) + pitch/time augmentation + ALL 277 files,
+peak-pick delta 0.25; beat = BLSTM (unchanged); tempo = strategy-D ensemble
+(comb_fusion + beat-AC primaries on >8% disagreement).
+
+### Leaderboard result
+| metric | before | after | delta | rank |
+|--------|--------|-------|-------|------|
+| Onset | 0.807 | **0.816** | +0.009 | 14th -> 13th |
+| Beat | 0.735 | 0.735 | 0 (untouched, safe) | 7th |
+| Tempo | 0.86 | **0.876** | **+0.016** | 6th |
+| Mean | ~0.801 | **~0.809** | +0.008 | |
+
+### Key finding
+Both bets EXCEEDED their offline estimates - again. Tempo strategy-D was +0.005
+offline but +0.016 on the leaderboard (3x). Onset multi-res+aug+all-277 was
+"within noise" offline but +0.009 on the leaderboard. The leaderboard has
+CONSISTENTLY come in above our offline numbers (onset proxy 0.7615->0.775;
+CNN fair 0.7881->0.807; here too). LESSON: our offline screens (fair-c127,
+26-file held-out, tempo p-score on 127) are CONSERVATIVE; for final/hail-mary
+calls, leaderboard-surprises-up justifies submitting "within-noise" improvements
+that stack real architecture + augmentation + max-data wins.
+
+### Decision
+KEEP. Final standings: onset 0.816 (13th), beat 0.735 (7th), tempo 0.876 (6th),
+mean ~0.809. From EXP-000 mean 0.38 -> 0.809. 1 submission remaining (held; no
+clear further lever - beat-aug/DBN washed structurally, onset/tempo near ceiling).
+
+---
+
 <!-- Add new entries below this line -->
